@@ -94,44 +94,63 @@ export class CbzReader extends BaseReader {
   }
 
   /**
-   * Extract images from ZIP data
-   * Uses a minimal ZIP parser implementation
+   * Extract images from ZIP data using Central Directory
+   * This is more robust than parsing local file headers
    */
   private async extractImages(data: ArrayBuffer): Promise<{ name: string; blob: Blob }[]> {
     const view = new DataView(data);
     const bytes = new Uint8Array(data);
     const images: { name: string; blob: Blob }[] = [];
 
-    let offset = 0;
+    // Find End of Central Directory record (search from end)
+    let eocdOffset = -1;
+    for (let i = data.byteLength - 22; i >= 0; i--) {
+      if (view.getUint32(i, true) === 0x06054b50) {
+        eocdOffset = i;
+        break;
+      }
+    }
 
-    while (offset < data.byteLength - 4) {
-      const signature = view.getUint32(offset, true);
+    if (eocdOffset === -1) {
+      console.error('Could not find End of Central Directory record');
+      return [];
+    }
 
-      // Local file header signature
-      if (signature !== 0x04034b50) break;
+    const cdOffset = view.getUint32(eocdOffset + 16, true);
+    const cdEntries = view.getUint16(eocdOffset + 10, true);
 
-      const compressionMethod = view.getUint16(offset + 8, true);
-      const compressedSize = view.getUint32(offset + 18, true);
-      // uncompressedSize is read but not used - kept for documentation
-      view.getUint32(offset + 22, true);
-      const filenameLength = view.getUint16(offset + 26, true);
-      const extraLength = view.getUint16(offset + 28, true);
+    // Parse Central Directory
+    let offset = cdOffset;
+    for (let i = 0; i < cdEntries && offset < eocdOffset; i++) {
+      const sig = view.getUint32(offset, true);
+      if (sig !== 0x02014b50) break; // Central directory file header signature
 
-      const filenameStart = offset + 30;
-      const filename = new TextDecoder().decode(bytes.slice(filenameStart, filenameStart + filenameLength));
+      const compressionMethod = view.getUint16(offset + 10, true);
+      const compressedSize = view.getUint32(offset + 20, true);
+      const filenameLength = view.getUint16(offset + 28, true);
+      const extraLength = view.getUint16(offset + 30, true);
+      const commentLength = view.getUint16(offset + 32, true);
+      const localHeaderOffset = view.getUint32(offset + 42, true);
 
-      const dataStart = filenameStart + filenameLength + extraLength;
-      const fileData = bytes.slice(dataStart, dataStart + compressedSize);
+      const filename = new TextDecoder().decode(bytes.slice(offset + 46, offset + 46 + filenameLength));
+
+      // Move to next central directory entry
+      offset += 46 + filenameLength + extraLength + commentLength;
 
       // Skip directories and non-image files
-      if (filenameLength > 0 && !filename.endsWith('/') && isImageFile(filename)) {
+      if (!filename.endsWith('/') && isImageFile(filename)) {
+        // Read from local file header to get actual data location
+        const localExtraLength = view.getUint16(localHeaderOffset + 28, true);
+        const dataStart = localHeaderOffset + 30 + filenameLength + localExtraLength;
+        const fileData = bytes.slice(dataStart, dataStart + compressedSize);
+
         let blob: Blob;
 
         if (compressionMethod === 0) {
           // Stored (no compression)
           blob = new Blob([fileData]);
         } else if (compressionMethod === 8) {
-          // Deflate compression - use DecompressionStream if available
+          // Deflate compression
           if (typeof DecompressionStream !== 'undefined') {
             try {
               const ds = new DecompressionStream('deflate-raw');
@@ -139,7 +158,6 @@ export class CbzReader extends BaseReader {
               writer.write(fileData);
               writer.close();
 
-              // Collect decompressed chunks
               const reader = ds.readable.getReader();
               const chunks: ArrayBuffer[] = [];
               while (true) {
@@ -147,31 +165,22 @@ export class CbzReader extends BaseReader {
                 if (done) break;
                 chunks.push(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
               }
-
-              // Combine chunks into a single blob
               blob = new Blob(chunks);
             } catch (err) {
-              console.warn(`Failed to decompress image: ${filename}`, err);
-              offset = dataStart + compressedSize;
+              console.warn(`Failed to decompress: ${filename}`, err);
               continue;
             }
           } else {
-            // Fallback: skip compressed files if DecompressionStream unavailable
-            console.warn(`Skipping compressed image: ${filename}`);
-            offset = dataStart + compressedSize;
+            console.warn(`DecompressionStream unavailable, skipping: ${filename}`);
             continue;
           }
         } else {
-          // Unsupported compression method
-          console.warn(`Unsupported compression method ${compressionMethod} for: ${filename}`);
-          offset = dataStart + compressedSize;
+          console.warn(`Unsupported compression method ${compressionMethod}: ${filename}`);
           continue;
         }
 
         images.push({ name: filename, blob });
       }
-
-      offset = dataStart + compressedSize;
     }
 
     // Sort images by filename (natural sort for proper page order)

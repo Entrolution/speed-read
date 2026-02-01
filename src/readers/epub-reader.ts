@@ -54,10 +54,14 @@ export class EpubReader extends BaseReader {
     // Get spine for page count
     this.spine = await this.book.loaded.spine;
 
-    // Create rendition
+    // Get container dimensions - epub.js needs explicit pixel values
+    const width = container.clientWidth || 600;
+    const height = container.clientHeight || 400;
+
+    // Create rendition with explicit dimensions
     this.rendition = this.book.renderTo(container, {
-      width: '100%',
-      height: '100%',
+      width: width,
+      height: height,
       spread: 'none', // Single page view
       flow: 'paginated',
     });
