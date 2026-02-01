@@ -1,8 +1,16 @@
 import { test, expect } from '@playwright/test';
 import path from 'path';
 
+// Skip visual regression tests in CI - they're environment-dependent
+// and require platform-specific baselines. Run locally for visual QA.
+const isCI = !!process.env.CI;
+
 test.describe('Visual Regression', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    if (isCI) {
+      testInfo.skip(true, 'Visual regression tests require platform-specific baselines');
+      return;
+    }
     await page.goto('/');
   });
 

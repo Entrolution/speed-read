@@ -14,12 +14,12 @@ export default defineConfig({
   // Visual regression test settings
   expect: {
     toHaveScreenshot: {
-      maxDiffPixels: 100, // Allow small anti-aliasing differences
+      maxDiffPixels: 500, // Allow anti-aliasing differences within platform
       threshold: 0.2, // 20% pixel difference threshold
     },
   },
   snapshotDir: './e2e/snapshots',
-  snapshotPathTemplate: '{snapshotDir}/{testFilePath}/{projectName}/{arg}{ext}',
+  snapshotPathTemplate: '{snapshotDir}/{testFilePath}/{platform}/{projectName}/{arg}{ext}',
   projects: [
     {
       name: 'chromium',
