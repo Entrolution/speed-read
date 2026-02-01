@@ -68,7 +68,7 @@ export class EpubReader extends BaseReader {
 
     // Create container with explicit pixel dimensions
     this.epubContainer = document.createElement('div');
-    this.epubContainer.style.cssText = `width: ${width}px; height: ${height}px; position: relative; overflow: hidden;`;
+    this.epubContainer.style.cssText = `width: ${width}px; height: ${height}px; position: relative;`;
     container.appendChild(this.epubContainer);
 
     // Create rendition with paginated flow
