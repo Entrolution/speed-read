@@ -15,6 +15,9 @@ type Rendition = {
   next: () => Promise<void>;
   prev: () => Promise<void>;
   resize: (width: number, height: number) => void;
+  themes: {
+    default: (styles: Record<string, Record<string, string>>) => void;
+  };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   on: (event: string, callback: (...args: any[]) => void) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -59,24 +62,37 @@ export class EpubReader extends BaseReader {
     // Clear container and create a dedicated div for epub.js
     container.innerHTML = '';
 
-    // Get container dimensions first - epub.js needs explicit pixel values
-    // Use a small delay to ensure layout is complete
+    // Ensure layout is complete before measuring
     await new Promise(resolve => requestAnimationFrame(resolve));
 
-    const width = container.clientWidth || 600;
-    const height = container.clientHeight || 400;
+    // Get container dimensions - fall back to reasonable defaults
+    const width = Math.max(container.clientWidth, 300);
+    const height = Math.max(container.clientHeight, 400);
 
-    // Create container with explicit pixel dimensions
+    // Create container matching epub.js example patterns
     this.epubContainer = document.createElement('div');
-    this.epubContainer.style.cssText = `width: ${width}px; height: ${height}px; position: relative;`;
+    this.epubContainer.style.cssText = `
+      width: ${width}px;
+      height: ${height}px;
+      position: relative;
+      background: white;
+    `;
     container.appendChild(this.epubContainer);
 
-    // Create rendition with paginated flow
+    // Create rendition - use string "100%" for width as in official examples
     this.rendition = this.book.renderTo(this.epubContainer, {
-      width: width,
+      width: '100%',
       height: height,
       spread: 'none',
       flow: 'paginated',
+    });
+
+    // Inject CSS to ensure content is visible
+    this.rendition.themes.default({
+      body: {
+        'padding': '20px !important',
+        'box-sizing': 'border-box',
+      },
     });
 
     // Track section changes
