@@ -7,7 +7,7 @@ These files are provided for testing Speed-Read functionality.
 | File | Format | Source | License |
 |------|--------|--------|---------|
 | `alice.epub` | EPUB | Project Gutenberg | Public Domain |
-| `sample.pdf` | PDF | africau.edu | Public Domain |
+| `sample.pdf` | PDF | Mozilla pdf.js | Apache 2.0 |
 | `sample.cbz` | CBZ | Lorem Picsum images | Unsplash License |
 
 ## Usage
