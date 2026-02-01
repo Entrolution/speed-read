@@ -146,3 +146,61 @@ speed-reader {
   max-height: 100%;
   object-fit: contain;
 }
+
+/* High contrast mode support */
+@media (prefers-contrast: more) {
+  speed-reader {
+    --speed-reader-bg: #ffffff;
+    --speed-reader-text: #000000;
+    --speed-reader-accent: #0000cc;
+    --speed-reader-error-bg: #ffffff;
+    --speed-reader-error-text: #cc0000;
+  }
+
+  .speed-reader-error {
+    border: 3px solid var(--speed-reader-error-text, #cc0000);
+  }
+
+  .speed-reader-retry-btn {
+    border: 2px solid currentColor;
+  }
+
+  .speed-reader-progress {
+    border: 1px solid #000;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .speed-reader-spinner {
+    animation: none;
+    border: 3px solid var(--speed-reader-accent, #0066cc);
+  }
+
+  .speed-reader-retry-btn {
+    transition: none;
+  }
+
+  .speed-reader-progress-bar {
+    transition: none;
+  }
+}
+
+/* Focus visible for keyboard users */
+.speed-reader-retry-btn:focus-visible {
+  outline: 3px solid var(--speed-reader-accent, #0066cc);
+  outline-offset: 2px;
+}
+
+/* Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

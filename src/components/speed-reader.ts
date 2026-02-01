@@ -39,6 +39,23 @@ export class SpeedReader extends LitElement {
       color: var(--speed-reader-text, #000000);
     }
 
+    /* Skip link for keyboard users */
+    .skip-link {
+      position: absolute;
+      top: -40px;
+      left: 0;
+      background: var(--speed-reader-accent, #0066cc);
+      color: white;
+      padding: 0.5rem 1rem;
+      z-index: 100;
+      text-decoration: none;
+      border-radius: 0 0 4px 0;
+    }
+
+    .skip-link:focus {
+      top: 0;
+    }
+
     .container {
       width: 100%;
       height: 100%;
@@ -53,6 +70,24 @@ export class SpeedReader extends LitElement {
       min-height: 0; /* Important for flex child to respect container bounds */
     }
 
+    .reader-content:focus {
+      outline: 2px solid var(--speed-reader-accent, #0066cc);
+      outline-offset: -2px;
+    }
+
+    /* Screen reader only - for live announcements */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
     .controls {
       display: flex;
       justify-content: center;
@@ -65,13 +100,18 @@ export class SpeedReader extends LitElement {
 
     .controls button {
       padding: 0.5rem 1rem;
-      border: 1px solid var(--speed-reader-accent, #0066cc);
+      border: 2px solid var(--speed-reader-accent, #0066cc);
       background: transparent;
       color: var(--speed-reader-accent, #0066cc);
       border-radius: 4px;
       cursor: pointer;
       font-size: 1rem;
       transition: background 0.2s, color 0.2s;
+    }
+
+    .controls button:focus {
+      outline: 2px solid var(--speed-reader-accent, #0066cc);
+      outline-offset: 2px;
     }
 
     .controls button:hover:not(:disabled) {
@@ -88,6 +128,35 @@ export class SpeedReader extends LitElement {
       font-size: 0.875rem;
       color: var(--speed-reader-text, #000000);
       opacity: 0.7;
+    }
+
+    /* High contrast mode support */
+    @media (prefers-contrast: more) {
+      .controls button {
+        border-width: 3px;
+      }
+
+      .controls button:disabled {
+        opacity: 0.7;
+        text-decoration: line-through;
+      }
+
+      .reader-content:focus {
+        outline-width: 3px;
+      }
+    }
+
+    /* Reduced motion support */
+    @media (prefers-reduced-motion: reduce) {
+      .controls button {
+        transition: none;
+      }
+
+      .speed-reader-spinner {
+        animation: none;
+        border-top-color: var(--speed-reader-accent, #0066cc);
+        border-right-color: var(--speed-reader-accent, #0066cc);
+      }
     }
 
     .speed-reader-loading {
@@ -302,21 +371,60 @@ export class SpeedReader extends LitElement {
     });
   }
 
+  private getPageAnnouncement(): string {
+    if (this.totalChapters > 0) {
+      return `Chapter ${this.currentChapter} of ${this.totalChapters}, Page ${this.currentPage} of ${this.totalPages}`;
+    }
+    return `Page ${this.currentPage} of ${this.totalPages}`;
+  }
+
   override render() {
+    const canGoPrev = this.currentPage > 1 || this.currentChapter > 1;
+    const canGoNext = this.currentPage < this.totalPages || this.currentChapter < this.totalChapters;
+
     return html`
-      <div class="container" part="container">
-        <div class="reader-content"></div>
+      <a href="#speed-reader-controls" class="skip-link">Skip to controls</a>
+      <div
+        class="container"
+        part="container"
+        role="application"
+        aria-label="Document reader"
+      >
+        <!-- Live region for screen reader announcements -->
+        <div
+          class="sr-only"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          ${!this.isLoading && !this.error ? this.getPageAnnouncement() : ''}
+        </div>
+
+        <div
+          class="reader-content"
+          role="document"
+          aria-label="${this.isLoading ? 'Loading document' : 'Document content'}"
+          tabindex="0"
+        ></div>
+
         ${!this.isLoading && !this.error
           ? html`
-              <div class="controls" part="controls">
+              <nav
+                id="speed-reader-controls"
+                class="controls"
+                part="controls"
+                role="toolbar"
+                aria-label="Document navigation"
+              >
                 <button
                   @click=${this.handlePrev}
-                  ?disabled=${this.currentPage <= 1 && this.currentChapter <= 1}
-                  aria-label="Previous page"
+                  ?disabled=${!canGoPrev}
+                  aria-label="Go to previous page"
+                  aria-keyshortcuts="ArrowLeft"
                 >
                   Previous
                 </button>
-                <span class="page-info">
+                <span class="page-info" aria-hidden="true">
                   ${this.totalChapters > 0
                     ? html`Ch ${this.currentChapter}/${this.totalChapters} &middot; `
                     : ''}
@@ -324,13 +432,13 @@ export class SpeedReader extends LitElement {
                 </span>
                 <button
                   @click=${this.handleNext}
-                  ?disabled=${this.currentPage >= this.totalPages &&
-                  this.currentChapter >= this.totalChapters}
-                  aria-label="Next page"
+                  ?disabled=${!canGoNext}
+                  aria-label="Go to next page"
+                  aria-keyshortcuts="ArrowRight Space"
                 >
                   Next
                 </button>
-              </div>
+              </nav>
             `
           : ''}
       </div>
