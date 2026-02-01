@@ -160,10 +160,11 @@ export class CbzReader extends BaseReader {
 
               const reader = ds.readable.getReader();
               const chunks: ArrayBuffer[] = [];
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
+              let result = await reader.read();
+              while (!result.done) {
+                const value = result.value;
                 chunks.push(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+                result = await reader.read();
               }
               blob = new Blob(chunks);
             } catch (err) {
