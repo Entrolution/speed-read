@@ -133,13 +133,28 @@ export class CbzReader extends BaseReader {
         } else if (compressionMethod === 8) {
           // Deflate compression - use DecompressionStream if available
           if (typeof DecompressionStream !== 'undefined') {
-            const ds = new DecompressionStream('deflate-raw');
-            const writer = ds.writable.getWriter();
-            writer.write(fileData);
-            writer.close();
+            try {
+              const ds = new DecompressionStream('deflate-raw');
+              const writer = ds.writable.getWriter();
+              writer.write(fileData);
+              writer.close();
 
-            const decompressed = await new Response(ds.readable).arrayBuffer();
-            blob = new Blob([decompressed]);
+              // Collect decompressed chunks
+              const reader = ds.readable.getReader();
+              const chunks: ArrayBuffer[] = [];
+              while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
+              }
+
+              // Combine chunks into a single blob
+              blob = new Blob(chunks);
+            } catch (err) {
+              console.warn(`Failed to decompress image: ${filename}`, err);
+              offset = dataStart + compressedSize;
+              continue;
+            }
           } else {
             // Fallback: skip compressed files if DecompressionStream unavailable
             console.warn(`Skipping compressed image: ${filename}`);
