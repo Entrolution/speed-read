@@ -14,7 +14,7 @@
   - [ ] PDF: Text-based, scanned documents, forms
   - [ ] CBZ: Comic archives with various image formats
 - [ ] Test DRM detection with protected samples
-- [ ] Verify demo site works after GitHub Pages deployment
+- [x] Verify demo site works after GitHub Pages deployment
 - [x] Tag and publish v0.1.0 to npm
 - [x] Verify CDN availability (jsdelivr)
 
