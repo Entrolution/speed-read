@@ -4,6 +4,28 @@
 export type DocumentFormat = 'epub' | 'pdf' | 'cbz';
 
 /**
+ * Table of Contents item
+ */
+export interface TocItem {
+  id: string;
+  label: string;
+  href?: string;      // EPUB href or PDF destination
+  page?: number;      // Page number (for PDF/CBZ)
+  level: number;      // Nesting depth (0-based)
+  children?: TocItem[];
+}
+
+/**
+ * Zoom fit modes
+ */
+export type FitMode = 'none' | 'width' | 'page';
+
+/**
+ * Page layout modes
+ */
+export type LayoutMode = '1-page' | '2-page';
+
+/**
  * Error types that can be emitted by the reader
  */
 export type ReaderErrorType =
@@ -108,6 +130,30 @@ export interface FormatReader {
 
   /** Get navigation controls */
   getNavigation(): ReaderNavigation;
+
+  /** Get table of contents (optional) */
+  getToc?(): TocItem[];
+
+  /** Navigate to a TOC item (optional) */
+  goToTocItem?(item: TocItem): Promise<void>;
+
+  /** Get current zoom level (optional) */
+  getZoom?(): number;
+
+  /** Set zoom level (optional) */
+  setZoom?(level: number): void;
+
+  /** Set fit mode (optional) */
+  setFitMode?(mode: FitMode): void;
+
+  /** Get current fit mode (optional) */
+  getFitMode?(): FitMode;
+
+  /** Set layout mode (optional) */
+  setLayout?(layout: LayoutMode): void;
+
+  /** Get current layout mode (optional) */
+  getLayout?(): LayoutMode;
 }
 
 /**

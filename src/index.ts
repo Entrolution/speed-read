@@ -4,7 +4,7 @@ export { SpeedReader } from './components/speed-reader';
 // Core exports for advanced usage
 export { ReaderEngine } from './core/engine';
 export { ManifestController } from './core/manifest-controller';
-export { PageController } from './core/controller';
+export { PageController, ZoomController, DisplayController } from './core/controller';
 
 // Validation utilities
 export {
@@ -30,4 +30,7 @@ export type {
   Manifest,
   ManifestChapter,
   ValidationResult,
+  TocItem,
+  FitMode,
+  LayoutMode,
 } from './types';

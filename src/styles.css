@@ -15,6 +15,20 @@ speed-reader {
   --speed-reader-accent: #0066cc;
   --speed-reader-error-bg: #fff0f0;
   --speed-reader-error-text: #cc0000;
+
+  /* TOC panel */
+  --speed-reader-toc-width: 280px;
+  --speed-reader-toc-bg: var(--speed-reader-bg);
+  --speed-reader-toc-hover: rgba(0, 0, 0, 0.05);
+  --speed-reader-toc-active: rgba(0, 0, 0, 0.1);
+
+  /* Toolbar */
+  --speed-reader-toolbar-height: 48px;
+  --speed-reader-toolbar-minimized-height: 36px;
+  --speed-reader-icon-size: 20px;
+
+  /* Two-page layout */
+  --speed-reader-page-gap: 20px;
 }
 
 /* Dark mode support */
@@ -25,6 +39,8 @@ speed-reader {
     --speed-reader-accent: #66b3ff;
     --speed-reader-error-bg: #2d1a1a;
     --speed-reader-error-text: #ff6666;
+    --speed-reader-toc-hover: rgba(255, 255, 255, 0.08);
+    --speed-reader-toc-active: rgba(255, 255, 255, 0.12);
   }
 }
 
