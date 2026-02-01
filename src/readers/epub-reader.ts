@@ -14,6 +14,7 @@ type Rendition = {
   display: (target?: string | number) => Promise<void>;
   next: () => Promise<void>;
   prev: () => Promise<void>;
+  resize: (width: number, height: number) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   on: (event: string, callback: (...args: any[]) => void) => void;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,19 +58,24 @@ export class EpubReader extends BaseReader {
 
     // Clear container and create a dedicated div for epub.js
     container.innerHTML = '';
-    this.epubContainer = document.createElement('div');
-    this.epubContainer.style.cssText = 'width: 100%; height: 100%; position: absolute; top: 0; left: 0;';
-    container.appendChild(this.epubContainer);
 
-    // Get container dimensions - epub.js needs explicit pixel values
+    // Get container dimensions first - epub.js needs explicit pixel values
+    // Use a small delay to ensure layout is complete
+    await new Promise(resolve => requestAnimationFrame(resolve));
+
     const width = container.clientWidth || 600;
     const height = container.clientHeight || 400;
 
-    // Create rendition with explicit dimensions
+    // Create container with explicit pixel dimensions
+    this.epubContainer = document.createElement('div');
+    this.epubContainer.style.cssText = `width: ${width}px; height: ${height}px; position: relative; overflow: hidden;`;
+    container.appendChild(this.epubContainer);
+
+    // Create rendition with paginated flow
     this.rendition = this.book.renderTo(this.epubContainer, {
       width: width,
       height: height,
-      spread: 'none', // Single page view
+      spread: 'none',
       flow: 'paginated',
     });
 
