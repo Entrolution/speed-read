@@ -34,7 +34,7 @@
 - [x] Add retry logic for network failures
 - [x] Handle malformed files gracefully
 - [x] Add loading progress indicator
-- [ ] Memory leak audit and fixes
+- [x] Memory leak audit and fixes
 
 ### 2.2 Accessibility
 - [x] Full keyboard navigation (focus management)

@@ -7,6 +7,8 @@ export class ManifestController {
   private manifest: Manifest | null = null;
   private currentChapterIndex = 0;
   private chapterData: Map<number, ArrayBuffer> = new Map();
+  private chapterAccessOrder: number[] = []; // LRU tracking
+  private readonly maxCacheSize = 5; // Keep current + 2 adjacent + buffer
   private onChapterChange?: (chapter: number, total: number) => void;
   private onError?: (error: ReaderError) => void;
 
@@ -93,6 +95,8 @@ export class ManifestController {
   async loadChapter(index: number): Promise<ArrayBuffer> {
     // Check cache first
     if (this.chapterData.has(index)) {
+      // Update LRU order - move to end (most recently used)
+      this.updateAccessOrder(index);
       return this.chapterData.get(index)!;
     }
 
@@ -108,8 +112,12 @@ export class ManifestController {
       }
       const data = await response.arrayBuffer();
 
+      // Evict oldest entries if cache is full
+      this.evictIfNeeded();
+
       // Cache the chapter data
       this.chapterData.set(index, data);
+      this.chapterAccessOrder.push(index);
 
       return data;
     } catch (err) {
@@ -122,6 +130,29 @@ export class ManifestController {
         this.onError(error);
       }
       throw error;
+    }
+  }
+
+  /**
+   * Update LRU access order
+   */
+  private updateAccessOrder(index: number): void {
+    const pos = this.chapterAccessOrder.indexOf(index);
+    if (pos !== -1) {
+      this.chapterAccessOrder.splice(pos, 1);
+    }
+    this.chapterAccessOrder.push(index);
+  }
+
+  /**
+   * Evict least recently used entries if cache exceeds max size
+   */
+  private evictIfNeeded(): void {
+    while (this.chapterData.size >= this.maxCacheSize && this.chapterAccessOrder.length > 0) {
+      const oldestIndex = this.chapterAccessOrder.shift();
+      if (oldestIndex !== undefined) {
+        this.chapterData.delete(oldestIndex);
+      }
     }
   }
 
@@ -189,6 +220,7 @@ export class ManifestController {
    */
   clearCache(): void {
     this.chapterData.clear();
+    this.chapterAccessOrder = [];
   }
 
   /**
@@ -198,5 +230,7 @@ export class ManifestController {
     this.clearCache();
     this.manifest = null;
     this.currentChapterIndex = 0;
+    this.onChapterChange = undefined;
+    this.onError = undefined;
   }
 }

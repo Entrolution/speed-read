@@ -42,6 +42,10 @@ export class EpubReader extends BaseReader {
   private relocateDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private pendingLocation: { current: number; total: number } | null = null;
 
+  // Event handlers stored for cleanup
+  private boundKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private boundRelocateHandler: EventListener | null = null;
+
   async load(data: ArrayBuffer, container: HTMLElement): Promise<void> {
     // Import foliate-js view module (registers foliate-view custom element)
     await import('foliate-js/view.js');
@@ -93,7 +97,7 @@ export class EpubReader extends BaseReader {
     const file = new File([data], 'book.epub', { type: 'application/epub+zip' });
 
     // Listen for page/location changes (debounced to handle multiple rapid events)
-    this.view.addEventListener('relocate', ((e: CustomEvent) => {
+    this.boundRelocateHandler = ((e: CustomEvent) => {
       const detail = e.detail;
 
       // Store the latest location data
@@ -125,7 +129,8 @@ export class EpubReader extends BaseReader {
           }
         }
       }, 150);
-    }) as EventListener);
+    }) as EventListener;
+    this.view.addEventListener('relocate', this.boundRelocateHandler);
 
     // Open the book
     await this.view.open(file);
@@ -154,7 +159,7 @@ export class EpubReader extends BaseReader {
    * Set up keyboard navigation for EPUB
    */
   private setupKeyboardNavigation(container: HTMLElement): void {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    this.boundKeyHandler = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
@@ -174,7 +179,7 @@ export class EpubReader extends BaseReader {
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', this.boundKeyHandler);
 
     // Make container focusable
     if (!container.hasAttribute('tabindex')) {
@@ -232,11 +237,23 @@ export class EpubReader extends BaseReader {
   }
 
   destroy(): void {
+    // Remove event listeners
+    if (this.boundKeyHandler) {
+      document.removeEventListener('keydown', this.boundKeyHandler);
+      this.boundKeyHandler = null;
+    }
+    if (this.view && this.boundRelocateHandler) {
+      this.view.removeEventListener('relocate', this.boundRelocateHandler);
+      this.boundRelocateHandler = null;
+    }
+
     if (this.relocateDebounceTimer) {
       clearTimeout(this.relocateDebounceTimer);
       this.relocateDebounceTimer = null;
     }
     this.pendingLocation = null;
+    this.onPageChangeCallback = undefined;
+
     if (this.view) {
       this.view.close();
       this.view.remove();

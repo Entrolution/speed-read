@@ -346,5 +346,11 @@ export class ReaderEngine {
     }
     this.container = null;
     this.currentFormat = null;
+
+    // Clear callbacks to prevent closure leaks
+    this.onError = undefined;
+    this.onPageChange = undefined;
+    this.onChapterChange = undefined;
+    this.onReady = undefined;
   }
 }
