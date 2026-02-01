@@ -12,6 +12,10 @@ export type ReaderErrorType =
   | 'DRM_PROTECTED'
   | 'LOAD_FAILED'
   | 'CORS_ERROR'
+  | 'NETWORK_ERROR'
+  | 'TIMEOUT'
+  | 'MALFORMED_FILE'
+  | 'RENDER_ERROR'
   | 'UNKNOWN';
 
 /**
@@ -22,6 +26,10 @@ export interface ReaderError {
   message: string;
   format?: DocumentFormat;
   details?: unknown;
+  /** User-friendly guidance on how to resolve the error */
+  guidance?: string;
+  /** Whether the operation can be retried */
+  retryable?: boolean;
 }
 
 /**

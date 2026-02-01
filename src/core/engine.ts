@@ -209,16 +209,35 @@ export class ReaderEngine {
   }
 
   /**
-   * Show loading indicator
+   * Show loading indicator with optional progress
    */
-  private showLoading(): void {
+  private showLoading(message = 'Loading...', progress?: number): void {
     if (!this.container) return;
+
+    const progressBar = progress !== undefined
+      ? `<div class="speed-reader-progress">
+           <div class="speed-reader-progress-bar" style="width: ${Math.round(progress)}%"></div>
+         </div>
+         <p class="speed-reader-progress-text">${Math.round(progress)}%</p>`
+      : '';
+
     this.container.innerHTML = `
       <div class="speed-reader-loading">
         <div class="speed-reader-spinner"></div>
-        <p>Loading...</p>
+        <p>${message}</p>
+        ${progressBar}
       </div>
     `;
+  }
+
+  /**
+   * Update loading progress
+   */
+  updateProgress(loaded: number, total: number): void {
+    const progress = total > 0 ? (loaded / total) * 100 : 0;
+    const loadedMB = (loaded / (1024 * 1024)).toFixed(1);
+    const totalMB = (total / (1024 * 1024)).toFixed(1);
+    this.showLoading(`Loading... ${loadedMB}MB / ${totalMB}MB`, progress);
   }
 
   /**
@@ -230,19 +249,60 @@ export class ReaderEngine {
   }
 
   /**
-   * Show error state
+   * Get error icon based on error type
+   */
+  private getErrorIcon(type: ReaderError['type']): string {
+    switch (type) {
+      case 'DRM_PROTECTED': return '🔒';
+      case 'NETWORK_ERROR': return '📡';
+      case 'TIMEOUT': return '⏱️';
+      case 'FILE_TOO_LARGE': return '📦';
+      case 'CORS_ERROR': return '🚫';
+      case 'INVALID_FORMAT': return '📄';
+      case 'MALFORMED_FILE': return '⚠️';
+      default: return '❌';
+    }
+  }
+
+  /**
+   * Get error title based on error type
+   */
+  private getErrorTitle(type: ReaderError['type']): string {
+    switch (type) {
+      case 'DRM_PROTECTED': return 'Protected Content';
+      case 'NETWORK_ERROR': return 'Connection Error';
+      case 'TIMEOUT': return 'Loading Timeout';
+      case 'FILE_TOO_LARGE': return 'File Too Large';
+      case 'CORS_ERROR': return 'Access Denied';
+      case 'INVALID_FORMAT': return 'Unsupported Format';
+      case 'MALFORMED_FILE': return 'Invalid File';
+      case 'RENDER_ERROR': return 'Display Error';
+      default: return 'Error';
+    }
+  }
+
+  /**
+   * Show error state with guidance and retry option
    */
   private showError(error: ReaderError): void {
     if (!this.container) return;
 
-    const icon = error.type === 'DRM_PROTECTED' ? '🔒' : '⚠️';
-    const title = error.type === 'DRM_PROTECTED' ? 'Protected Content' : 'Error';
+    const icon = this.getErrorIcon(error.type);
+    const title = this.getErrorTitle(error.type);
+    const guidance = error.guidance
+      ? `<p class="speed-reader-error-guidance">${error.guidance}</p>`
+      : '';
+    const retryButton = error.retryable
+      ? `<button class="speed-reader-retry-btn" onclick="this.closest('.speed-reader-error').dispatchEvent(new CustomEvent('retry', { bubbles: true }))">Try Again</button>`
+      : '';
 
     this.container.innerHTML = `
       <div class="speed-reader-error">
         <div class="speed-reader-error-icon">${icon}</div>
         <h2>${title}</h2>
-        <p>${error.message}</p>
+        <p class="speed-reader-error-message">${error.message}</p>
+        ${guidance}
+        ${retryButton}
       </div>
     `;
   }
