@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speed-Read Demo</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      margin-bottom: 0.5rem;
+      color: #333;
+    }
+
+    .tagline {
+      color: #666;
+      margin-bottom: 2rem;
+    }
+
+    .demo-section {
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .demo-section h2 {
+      margin-bottom: 1rem;
+      color: #333;
+    }
+
+    .file-input-area {
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .file-input-area:hover {
+      border-color: #0066cc;
+      background: #f0f7ff;
+    }
+
+    .file-input-area.dragover {
+      border-color: #0066cc;
+      background: #e6f0ff;
+    }
+
+    .file-input-area input {
+      display: none;
+    }
+
+    .file-input-area p {
+      color: #666;
+    }
+
+    .file-input-area .formats {
+      margin-top: 0.5rem;
+      font-size: 0.875rem;
+      color: #999;
+    }
+
+    .reader-container {
+      height: 600px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 1rem;
+    }
+
+    speed-reader {
+      width: 100%;
+      height: 100%;
+    }
+
+    .status {
+      margin-top: 1rem;
+      padding: 0.75rem;
+      background: #f0f0f0;
+      border-radius: 4px;
+      font-size: 0.875rem;
+      color: #666;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 2rem;
+      color: #999;
+      font-size: 0.875rem;
+    }
+
+    .footer a {
+      color: #0066cc;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Speed-Read</h1>
+    <p class="tagline">Lightweight, embeddable document reader for EPUB, PDF, and CBZ</p>
+
+    <div class="demo-section">
+      <h2>Try it out</h2>
+      <div class="file-input-area" id="dropzone">
+        <input type="file" id="fileInput" accept=".epub,.pdf,.cbz">
+        <p>Drop a file here or click to select</p>
+        <p class="formats">Supports: EPUB, PDF, CBZ</p>
+      </div>
+
+      <div class="reader-container" id="readerContainer" style="display: none;">
+        <speed-reader id="reader"></speed-reader>
+      </div>
+
+      <div class="status" id="status">
+        Waiting for file...
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <h2>Usage</h2>
+      <pre><code>&lt;script src="https://cdn.jsdelivr.net/npm/speed-read@latest"&gt;&lt;/script&gt;
+&lt;speed-reader src="/book.epub"&gt;&lt;/speed-reader&gt;</code></pre>
+    </div>
+
+    <div class="footer">
+      <a href="https://github.com/gvonness-apolitical/speed-read">GitHub</a> |
+      <a href="https://www.npmjs.com/package/speed-read">npm</a>
+    </div>
+  </div>
+
+  <script type="module">
+    import 'speed-read';
+
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const readerContainer = document.getElementById('readerContainer');
+    const reader = document.getElementById('reader');
+    const status = document.getElementById('status');
+
+    // Click to select file
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    // File input change
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) loadFile(file);
+    });
+
+    // Drag and drop
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('dragover');
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.classList.remove('dragover');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) loadFile(file);
+    });
+
+    // Reader events
+    reader.addEventListener('ready', () => {
+      status.textContent = 'Document loaded!';
+    });
+
+    reader.addEventListener('pagechange', (e) => {
+      const { page, total } = e.detail;
+      status.textContent = `Page ${page} of ${total}`;
+    });
+
+    reader.addEventListener('error', (e) => {
+      status.textContent = `Error: ${e.detail.message}`;
+      status.style.background = '#fff0f0';
+      status.style.color = '#cc0000';
+    });
+
+    function loadFile(file) {
+      status.textContent = `Loading ${file.name}...`;
+      status.style.background = '#f0f0f0';
+      status.style.color = '#666';
+      readerContainer.style.display = 'block';
+      reader.loadFile(file);
+    }
+  </script>
+</body>
+</html>
