@@ -16,9 +16,8 @@ export class PdfReader extends BaseReader {
     // Dynamic import pdf.js
     const pdfjsLib = await import('pdfjs-dist');
 
-    // Set up the worker
-    // The worker is loaded from CDN for simplicity
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    // Set up the worker from jsdelivr (matches npm package version)
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
     // Load the PDF document
     const loadingTask = pdfjsLib.getDocument({ data });
