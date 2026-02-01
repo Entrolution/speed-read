@@ -7,19 +7,19 @@ This guide will help you add Speed-Read to your project.
 ### Via npm
 
 ```bash
-npm install speed-read
+npm install @entrolution/speed-read
 ```
 
 ### Via CDN
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/speed-read@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@entrolution/speed-read@latest"></script>
 ```
 
 Or with a specific version:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/speed-read@0.1.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/@entrolution/speed-read@0.1.0"></script>
 ```
 
 ## Basic Usage
@@ -32,7 +32,7 @@ The simplest way to use Speed-Read is with the Web Component:
 <!DOCTYPE html>
 <html>
 <head>
-  <script src="https://cdn.jsdelivr.net/npm/speed-read@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@entrolution/speed-read@latest"></script>
   <style>
     speed-reader {
       width: 100%;
@@ -49,7 +49,7 @@ The simplest way to use Speed-Read is with the Web Component:
 ### React Component
 
 ```jsx
-import { Reader } from 'speed-read/react';
+import { Reader } from '@entrolution/speed-read/react';
 
 function App() {
   return (

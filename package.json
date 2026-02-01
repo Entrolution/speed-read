@@ -1,5 +1,5 @@
 {
-  "name": "speed-read",
+  "name": "@entrolution/speed-read",
   "version": "0.1.0",
   "description": "Lightweight, embeddable document reader for EPUB, PDF, and CBZ. Add a reader to any webpage in one line of code.",
   "type": "module",
