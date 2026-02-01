@@ -48,8 +48,9 @@ export class SpeedReader extends LitElement {
 
     .reader-content {
       flex: 1;
-      overflow: hidden;
+      overflow: auto;
       position: relative;
+      min-height: 0; /* Important for flex child to respect container bounds */
     }
 
     .controls {

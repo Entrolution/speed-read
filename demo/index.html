@@ -46,6 +46,53 @@
       color: #333;
     }
 
+    .sample-buttons {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .sample-buttons button {
+      padding: 0.5rem 1rem;
+      border: 1px solid #0066cc;
+      background: #0066cc;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: background 0.2s;
+    }
+
+    .sample-buttons button:hover {
+      background: #0052a3;
+    }
+
+    .sample-buttons button:disabled {
+      background: #ccc;
+      border-color: #ccc;
+      cursor: not-allowed;
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      margin: 1rem 0;
+      color: #999;
+      font-size: 0.875rem;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .divider span {
+      padding: 0 1rem;
+    }
+
     .file-input-area {
       border: 2px dashed #ccc;
       border-radius: 8px;
@@ -101,6 +148,45 @@
       color: #666;
     }
 
+    .code-section {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 1rem;
+      border-radius: 4px;
+      overflow-x: auto;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    .code-section .tag { color: #569cd6; }
+    .code-section .attr { color: #9cdcfe; }
+    .code-section .string { color: #ce9178; }
+
+    .features {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .feature {
+      padding: 1rem;
+      background: #f8f8f8;
+      border-radius: 4px;
+    }
+
+    .feature h3 {
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+      color: #333;
+    }
+
+    .feature p {
+      font-size: 0.875rem;
+      color: #666;
+    }
+
     .footer {
       text-align: center;
       margin-top: 2rem;
@@ -120,6 +206,15 @@
 
     <div class="demo-section">
       <h2>Try it out</h2>
+
+      <div class="sample-buttons">
+        <button onclick="loadSample('epub')" id="btn-epub">Load Sample EPUB</button>
+        <button onclick="loadSample('pdf')" id="btn-pdf">Load Sample PDF</button>
+        <button onclick="loadSample('cbz')" id="btn-cbz">Load Sample CBZ</button>
+      </div>
+
+      <div class="divider"><span>or</span></div>
+
       <div class="file-input-area" id="dropzone">
         <input type="file" id="fileInput" accept=".epub,.pdf,.cbz">
         <p>Drop a file here or click to select</p>
@@ -131,19 +226,51 @@
       </div>
 
       <div class="status" id="status">
-        Waiting for file...
+        Click a sample button or drop a file to get started
       </div>
     </div>
 
     <div class="demo-section">
-      <h2>Usage</h2>
-      <pre><code>&lt;script src="https://cdn.jsdelivr.net/npm/speed-read@latest"&gt;&lt;/script&gt;
-&lt;speed-reader src="/book.epub"&gt;&lt;/speed-reader&gt;</code></pre>
+      <h2>Quick Start</h2>
+      <div class="code-section">
+<span class="tag">&lt;script</span> <span class="attr">src</span>=<span class="string">"https://cdn.jsdelivr.net/npm/@entrolution/speed-read@latest"</span><span class="tag">&gt;&lt;/script&gt;</span>
+<span class="tag">&lt;speed-reader</span> <span class="attr">src</span>=<span class="string">"/book.epub"</span><span class="tag">&gt;&lt;/speed-reader&gt;</span>
+      </div>
+
+      <div class="features">
+        <div class="feature">
+          <h3>Multi-Format</h3>
+          <p>EPUB, PDF, and CBZ support with automatic detection</p>
+        </div>
+        <div class="feature">
+          <h3>Lightweight</h3>
+          <p>~14KB core, format libraries loaded on-demand</p>
+        </div>
+        <div class="feature">
+          <h3>Dual Export</h3>
+          <p>Web Component and React wrapper included</p>
+        </div>
+        <div class="feature">
+          <h3>Episodic Content</h3>
+          <p>Manifest support for chapter-based content</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="demo-section">
+      <h2>Documentation</h2>
+      <p style="margin-bottom: 1rem;">
+        <a href="https://github.com/entrolution/speed-read#readme">README</a> |
+        <a href="./docs/getting-started.md">Getting Started</a> |
+        <a href="./docs/api-reference.md">API Reference</a> |
+        <a href="./docs/troubleshooting.md">Troubleshooting</a>
+      </p>
     </div>
 
     <div class="footer">
-      <a href="https://github.com/gvonness-apolitical/speed-read">GitHub</a> |
-      <a href="https://www.npmjs.com/package/speed-read">npm</a>
+      <a href="https://github.com/entrolution/speed-read">GitHub</a> |
+      <a href="https://www.npmjs.com/package/@entrolution/speed-read">npm</a> |
+      <a href="https://github.com/entrolution/speed-read/blob/main/ROADMAP.md">Roadmap</a>
     </div>
   </div>
 
@@ -155,6 +282,41 @@
     const readerContainer = document.getElementById('readerContainer');
     const reader = document.getElementById('reader');
     const status = document.getElementById('status');
+
+    // Cache-busting version - increment when samples change
+    const v = '3';
+    const samples = {
+      epub: { url: `./samples/alice.epub?v=${v}`, name: 'Alice in Wonderland (EPUB)' },
+      pdf: { url: `./samples/sample.pdf?v=${v}`, name: 'Sample Document (PDF)' },
+      cbz: { url: `./samples/sample.cbz?v=${v}`, name: 'Sample Comic (CBZ)' }
+    };
+
+    // Make loadSample available globally
+    window.loadSample = async function(type) {
+      const sample = samples[type];
+      if (!sample) return;
+
+      // Disable buttons while loading
+      document.querySelectorAll('.sample-buttons button').forEach(b => b.disabled = true);
+
+      status.textContent = `Loading ${sample.name}...`;
+      status.style.background = '#f0f0f0';
+      status.style.color = '#666';
+
+      try {
+        const response = await fetch(sample.url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        readerContainer.style.display = 'block';
+        reader.loadFile(blob);
+      } catch (err) {
+        status.textContent = `Failed to load sample: ${err.message}`;
+        status.style.background = '#fff0f0';
+        status.style.color = '#cc0000';
+      } finally {
+        document.querySelectorAll('.sample-buttons button').forEach(b => b.disabled = false);
+      }
+    };
 
     // Click to select file
     dropzone.addEventListener('click', () => fileInput.click());
@@ -184,12 +346,12 @@
 
     // Reader events
     reader.addEventListener('ready', () => {
-      status.textContent = 'Document loaded!';
+      status.textContent = 'Document loaded! Use arrow keys or swipe to navigate.';
     });
 
     reader.addEventListener('pagechange', (e) => {
       const { page, total } = e.detail;
-      status.textContent = `Page ${page} of ${total}`;
+      status.textContent = `Page ${page} of ${total} - Use arrow keys or swipe to navigate`;
     });
 
     reader.addEventListener('error', (e) => {

@@ -2,8 +2,8 @@
 
 Lightweight, embeddable document reader for EPUB, PDF, and CBZ. Add a reader to any webpage in one line of code.
 
-[![npm](https://img.shields.io/npm/v/speed-read)](https://www.npmjs.com/package/speed-read)
-[![CI](https://github.com/gvonness-apolitical/speed-read/actions/workflows/ci.yml/badge.svg)](https://github.com/gvonness-apolitical/speed-read/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@entrolution/speed-read)](https://www.npmjs.com/package/@entrolution/speed-read)
+[![CI](https://github.com/entrolution/speed-read/actions/workflows/ci.yml/badge.svg)](https://github.com/entrolution/speed-read/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Features
@@ -20,14 +20,14 @@ Lightweight, embeddable document reader for EPUB, PDF, and CBZ. Add a reader to 
 ### HTML (CDN)
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/speed-read@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@entrolution/speed-read@latest"></script>
 <speed-reader src="/book.epub"></speed-reader>
 ```
 
 ### React
 
 ```jsx
-import { Reader } from 'speed-read/react';
+import { Reader } from '@entrolution/speed-read/react';
 
 function App() {
   return (
@@ -58,13 +58,13 @@ function App() {
 ## Installation
 
 ```bash
-npm install speed-read
+npm install @entrolution/speed-read
 ```
 
 Or use via CDN:
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/speed-read@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/@entrolution/speed-read@latest"></script>
 ```
 
 ## Usage
@@ -98,7 +98,7 @@ Or use via CDN:
 ### React Component
 
 ```jsx
-import { Reader } from 'speed-read/react';
+import { Reader } from '@entrolution/speed-read/react';
 
 function App() {
   return (
@@ -227,6 +227,14 @@ npm test
 # Build
 npm run build
 ```
+
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for planned features including:
+- Table of Contents & Search
+- Bookmarks & Annotations
+- Themes & Typography controls
+- Offline/PWA support
 
 ## Contributing
 

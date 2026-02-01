@@ -16,9 +16,8 @@ export class PdfReader extends BaseReader {
     // Dynamic import pdf.js
     const pdfjsLib = await import('pdfjs-dist');
 
-    // Set up the worker
-    // The worker is loaded from CDN for simplicity
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+    // Set up the worker from jsdelivr (matches npm package version)
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
     // Load the PDF document
     const loadingTask = pdfjsLib.getDocument({ data });
@@ -69,11 +68,16 @@ export class PdfReader extends BaseReader {
     // Get the page
     const page = await this.pdfDoc.getPage(pageNum);
 
-    // Calculate scale to fit container
+    // Calculate scale to fit container (both width and height)
     if (this.container) {
       const containerWidth = this.container.clientWidth;
+      const containerHeight = this.container.clientHeight;
       const defaultViewport = page.getViewport({ scale: 1 });
-      this.scale = containerWidth / defaultViewport.width;
+
+      // Calculate scale to fit both dimensions
+      const scaleX = containerWidth / defaultViewport.width;
+      const scaleY = containerHeight / defaultViewport.height;
+      this.scale = Math.min(scaleX, scaleY, 2); // Cap at 2x for quality
     }
 
     const viewport = page.getViewport({ scale: this.scale });
@@ -81,6 +85,8 @@ export class PdfReader extends BaseReader {
     // Set canvas dimensions
     this.canvas.width = viewport.width;
     this.canvas.height = viewport.height;
+    this.canvas.style.display = 'block';
+    this.canvas.style.margin = '0 auto';
 
     // Render the page
     this.currentRenderTask = page.render({
