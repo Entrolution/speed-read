@@ -37,11 +37,11 @@
 - [ ] Memory leak audit and fixes
 
 ### 2.2 Accessibility
-- [ ] Full keyboard navigation (focus management)
-- [ ] ARIA labels and roles
+- [x] Full keyboard navigation (focus management)
+- [x] ARIA labels and roles
 - [ ] Screen reader testing
-- [ ] High contrast mode support
-- [ ] Reduced motion support
+- [x] High contrast mode support
+- [x] Reduced motion support
 
 ### 2.3 Performance
 - [ ] Canvas pooling for PDF/CBZ
