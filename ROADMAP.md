@@ -48,7 +48,15 @@
 - [x] Image lazy loading for CBZ (on-demand extraction)
 - [x] Preload adjacent pages (CBZ preloads next 2 pages)
 - [x] Web Worker for heavy operations (CBZ extraction in worker)
-- [ ] Bundle size optimization audit
+- [x] Bundle size optimization audit (see below)
+
+#### Bundle Size Audit Results
+- **Initial load**: 17.5 KB gzipped (core + Lit)
+- **EPUB**: +65 KB (foliate-js modules, loaded on-demand)
+- **PDF**: +145 KB (pdfjs-dist, loaded on-demand)
+- **CBZ**: +25 KB (worker + zip, loaded on-demand)
+- Code-splitting working correctly - format libs only load when needed
+- No actionable optimizations without forking dependencies
 
 ### 2.4 Testing
 - [x] E2E tests with Playwright
