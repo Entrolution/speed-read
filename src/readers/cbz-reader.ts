@@ -209,7 +209,7 @@ export class CbzReader extends BaseReader {
     const index = pageNum - 1;
 
     // Extract image (from cache or worker)
-    const blob = await this.extractImage(index);
+    await this.extractImage(index);
     const cached = this.imageCache.get(index);
 
     if (!cached) {
