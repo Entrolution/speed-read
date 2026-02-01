@@ -60,7 +60,7 @@
 
 ### 2.4 Testing
 - [x] E2E tests with Playwright
-- [ ] Visual regression tests
+- [x] Visual regression tests (screenshot comparison for PDF, EPUB, CBZ, controls, errors)
 - [x] Cross-browser testing (Chrome, Firefox, Safari, Edge) - configured in playwright.config.ts
 - [x] Mobile browser testing - configured in playwright.config.ts (Pixel 5, iPhone 12)
 

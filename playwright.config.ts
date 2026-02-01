@@ -11,6 +11,15 @@ export default defineConfig({
     baseURL: 'http://localhost:5173',
     trace: 'on-first-retry',
   },
+  // Visual regression test settings
+  expect: {
+    toHaveScreenshot: {
+      maxDiffPixels: 500, // Allow anti-aliasing differences within platform
+      threshold: 0.2, // 20% pixel difference threshold
+    },
+  },
+  snapshotDir: './e2e/snapshots',
+  snapshotPathTemplate: '{snapshotDir}/{testFilePath}/{platform}/{projectName}/{arg}{ext}',
   projects: [
     {
       name: 'chromium',
