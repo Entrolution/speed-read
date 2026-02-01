@@ -228,6 +228,14 @@ npm test
 npm run build
 ```
 
+## Roadmap
+
+See [ROADMAP.md](ROADMAP.md) for planned features including:
+- Table of Contents & Search
+- Bookmarks & Annotations
+- Themes & Typography controls
+- Offline/PWA support
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
