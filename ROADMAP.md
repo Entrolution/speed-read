@@ -4,12 +4,9 @@
 **Goal:** Make the library publicly available and usable
 
 ### 1.1 GitHub Configuration
-- [ ] Enable GitHub Pages (Settings → Pages → Source: GitHub Actions)
-- [ ] Configure branch protection rules for `main`:
-  - Require PR reviews
-  - Require status checks (CI)
-  - No force pushes
-- [ ] Add NPM_TOKEN secret for automated publishing
+- [x] Enable GitHub Pages (Settings → Pages → Source: GitHub Actions)
+- [x] Configure branch protection rules for `main`
+- [x] Set up npm Trusted Publishing (OIDC) for automated releases
 
 ### 1.2 First Release
 - [ ] Manual testing with sample files:
@@ -18,14 +15,14 @@
   - [ ] CBZ: Comic archives with various image formats
 - [ ] Test DRM detection with protected samples
 - [ ] Verify demo site works after GitHub Pages deployment
-- [ ] Tag and publish v0.1.0 to npm
-- [ ] Verify CDN availability (jsdelivr, unpkg)
+- [x] Tag and publish v0.1.0 to npm
+- [x] Verify CDN availability (jsdelivr)
 
 ### 1.3 Documentation Polish
-- [ ] Add live examples to demo site
-- [ ] Create sample files for testing (small, open-licensed)
-- [ ] Add troubleshooting section to docs
-- [ ] Add CORS setup guide with common server examples
+- [x] Add live examples to demo site
+- [x] Create sample files for testing (small, open-licensed)
+- [x] Add troubleshooting section to docs
+- [x] Add CORS setup guide with common server examples
 
 ---
 
