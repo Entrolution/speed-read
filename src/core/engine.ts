@@ -214,16 +214,17 @@ export class ReaderEngine {
   private showLoading(message = 'Loading...', progress?: number): void {
     if (!this.container) return;
 
-    const progressBar = progress !== undefined
-      ? `<div class="speed-reader-progress">
-           <div class="speed-reader-progress-bar" style="width: ${Math.round(progress)}%"></div>
+    const progressValue = progress !== undefined ? Math.round(progress) : undefined;
+    const progressBar = progressValue !== undefined
+      ? `<div class="speed-reader-progress" role="progressbar" aria-valuenow="${progressValue}" aria-valuemin="0" aria-valuemax="100" aria-label="Loading progress">
+           <div class="speed-reader-progress-bar" style="width: ${progressValue}%"></div>
          </div>
-         <p class="speed-reader-progress-text">${Math.round(progress)}%</p>`
+         <p class="speed-reader-progress-text" aria-hidden="true">${progressValue}%</p>`
       : '';
 
     this.container.innerHTML = `
-      <div class="speed-reader-loading">
-        <div class="speed-reader-spinner"></div>
+      <div class="speed-reader-loading" role="status" aria-live="polite" aria-label="${message}">
+        <div class="speed-reader-spinner" aria-hidden="true"></div>
         <p>${message}</p>
         ${progressBar}
       </div>
@@ -293,14 +294,14 @@ export class ReaderEngine {
       ? `<p class="speed-reader-error-guidance">${error.guidance}</p>`
       : '';
     const retryButton = error.retryable
-      ? `<button class="speed-reader-retry-btn" onclick="this.closest('.speed-reader-error').dispatchEvent(new CustomEvent('retry', { bubbles: true }))">Try Again</button>`
+      ? `<button class="speed-reader-retry-btn" onclick="this.closest('.speed-reader-error').dispatchEvent(new CustomEvent('retry', { bubbles: true }))" aria-label="Retry loading the document">Try Again</button>`
       : '';
 
     this.container.innerHTML = `
-      <div class="speed-reader-error">
-        <div class="speed-reader-error-icon">${icon}</div>
-        <h2>${title}</h2>
-        <p class="speed-reader-error-message">${error.message}</p>
+      <div class="speed-reader-error" role="alert" aria-live="assertive">
+        <div class="speed-reader-error-icon" aria-hidden="true">${icon}</div>
+        <h2 id="error-title">${title}</h2>
+        <p class="speed-reader-error-message" id="error-message">${error.message}</p>
         ${guidance}
         ${retryButton}
       </div>
