@@ -255,3 +255,4 @@ reader.addEventListener('error', (e) => {
 
 - See the [API Reference](./api-reference.md) for complete documentation
 - Check out the [demo](https://gvonness-apolitical.github.io/speed-read/) for live examples
+- Having issues? See [Troubleshooting](./troubleshooting.md)
