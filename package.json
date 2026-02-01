@@ -53,12 +53,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gvonness-apolitical/speed-read.git"
+    "url": "git+https://github.com/entrolution/speed-read.git"
   },
   "bugs": {
-    "url": "https://github.com/gvonness-apolitical/speed-read/issues"
+    "url": "https://github.com/entrolution/speed-read/issues"
   },
-  "homepage": "https://gvonness-apolitical.github.io/speed-read/",
+  "homepage": "https://entrolution.github.io/speed-read/",
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/react": "^18.2.48",

@@ -230,7 +230,7 @@ Large files or slow network.
 
 ## Still Having Issues?
 
-1. Check the [GitHub Issues](https://github.com/gvonness-apolitical/speed-read/issues) for similar problems
+1. Check the [GitHub Issues](https://github.com/entrolution/speed-read/issues) for similar problems
 2. Open a new issue with:
    - Browser and version
    - Error message (from console)
