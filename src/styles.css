@@ -1,0 +1,97 @@
+/**
+ * Speed Reader - Default Styles
+ *
+ * CSS Custom Properties for theming:
+ * --speed-reader-bg: Background color (default: #ffffff)
+ * --speed-reader-text: Text color (default: #000000)
+ * --speed-reader-accent: Accent color for controls (default: #0066cc)
+ * --speed-reader-error-bg: Error background color (default: #fff0f0)
+ * --speed-reader-error-text: Error text color (default: #cc0000)
+ */
+
+speed-reader {
+  --speed-reader-bg: #ffffff;
+  --speed-reader-text: #000000;
+  --speed-reader-accent: #0066cc;
+  --speed-reader-error-bg: #fff0f0;
+  --speed-reader-error-text: #cc0000;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  speed-reader {
+    --speed-reader-bg: #1a1a1a;
+    --speed-reader-text: #e0e0e0;
+    --speed-reader-accent: #66b3ff;
+    --speed-reader-error-bg: #2d1a1a;
+    --speed-reader-error-text: #ff6666;
+  }
+}
+
+/* Loading spinner animation */
+@keyframes speed-reader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.speed-reader-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 1rem;
+}
+
+.speed-reader-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e0e0e0;
+  border-top-color: var(--speed-reader-accent, #0066cc);
+  border-radius: 50%;
+  animation: speed-reader-spin 1s linear infinite;
+}
+
+.speed-reader-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 2rem;
+  text-align: center;
+  background: var(--speed-reader-error-bg, #fff0f0);
+}
+
+.speed-reader-error-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.speed-reader-error h2 {
+  margin: 0 0 0.5rem;
+  color: var(--speed-reader-error-text, #cc0000);
+}
+
+.speed-reader-error p {
+  margin: 0;
+  max-width: 400px;
+  opacity: 0.8;
+}
+
+/* PDF canvas styling */
+.speed-reader-pdf-canvas {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+}
+
+/* CBZ image styling */
+.speed-reader-cbz-image {
+  display: block;
+  margin: 0 auto;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}

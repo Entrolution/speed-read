@@ -1,0 +1,94 @@
+{
+  "name": "speed-read",
+  "version": "0.1.0",
+  "description": "Lightweight, embeddable document reader for EPUB, PDF, and CBZ. Add a reader to any webpage in one line of code.",
+  "type": "module",
+  "main": "./dist/speed-reader.umd.cjs",
+  "module": "./dist/speed-reader.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/speed-reader.js",
+      "require": "./dist/speed-reader.umd.cjs",
+      "types": "./dist/types/index.d.ts"
+    },
+    "./react": {
+      "import": "./dist/react/index.js",
+      "types": "./dist/types/react/index.d.ts"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:main && npm run build:react && npm run build:css",
+    "build:main": "tsc && vite build",
+    "build:react": "vite build --config vite.react.config.ts",
+    "build:css": "cp src/styles.css dist/style.css",
+    "build:docs": "vite build --config vite.docs.config.ts",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "epub",
+    "pdf",
+    "cbz",
+    "reader",
+    "web-component",
+    "react",
+    "ebook",
+    "comic-reader",
+    "typescript",
+    "lightweight"
+  ],
+  "author": "Entrolution",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gvonness-apolitical/speed-read.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gvonness-apolitical/speed-read/issues"
+  },
+  "homepage": "https://gvonness-apolitical.github.io/speed-read/",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@typescript-eslint/eslint-plugin": "^6.19.0",
+    "@typescript-eslint/parser": "^6.19.0",
+    "@vitejs/plugin-react": "^4.2.1",
+    "eslint": "^8.56.0",
+    "jsdom": "^24.0.0",
+    "terser": "^5.46.0",
+    "typescript": "^5.3.3",
+    "vite": "^5.0.12",
+    "vite-plugin-dts": "^3.7.1",
+    "vitest": "^1.2.1"
+  },
+  "dependencies": {
+    "epubjs": "^0.3.93",
+    "lit": "^3.1.1",
+    "pdfjs-dist": "^4.0.379"
+  },
+  "peerDependencies": {
+    "react": "^17.0.0 || ^18.0.0",
+    "react-dom": "^17.0.0 || ^18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
+  }
+}
