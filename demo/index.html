@@ -283,10 +283,12 @@
     const reader = document.getElementById('reader');
     const status = document.getElementById('status');
 
+    // Cache-busting version - increment when samples change
+    const v = '2';
     const samples = {
-      epub: { url: './samples/alice.epub', name: 'Alice in Wonderland (EPUB)' },
-      pdf: { url: './samples/sample.pdf', name: 'Sample Document (PDF)' },
-      cbz: { url: './samples/sample.cbz', name: 'Sample Comic (CBZ)' }
+      epub: { url: `./samples/alice.epub?v=${v}`, name: 'Alice in Wonderland (EPUB)' },
+      pdf: { url: `./samples/sample.pdf?v=${v}`, name: 'Sample Document (PDF)' },
+      cbz: { url: `./samples/sample.cbz?v=${v}`, name: 'Sample Comic (CBZ)' }
     };
 
     // Make loadSample available globally
