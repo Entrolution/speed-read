@@ -40,6 +40,7 @@ export class EpubReader extends BaseReader {
   private spine: Spine | null = null;
   private currentSection = 0;
   private onPageChangeCallback?: (page: number, total: number) => void;
+  private epubContainer: HTMLDivElement | null = null;
 
   async load(data: ArrayBuffer, container: HTMLElement): Promise<void> {
     // Dynamic import epub.js
@@ -54,12 +55,18 @@ export class EpubReader extends BaseReader {
     // Get spine for page count
     this.spine = await this.book.loaded.spine;
 
+    // Clear container and create a dedicated div for epub.js
+    container.innerHTML = '';
+    this.epubContainer = document.createElement('div');
+    this.epubContainer.style.cssText = 'width: 100%; height: 100%; position: absolute; top: 0; left: 0;';
+    container.appendChild(this.epubContainer);
+
     // Get container dimensions - epub.js needs explicit pixel values
     const width = container.clientWidth || 600;
     const height = container.clientHeight || 400;
 
     // Create rendition with explicit dimensions
-    this.rendition = this.book.renderTo(container, {
+    this.rendition = this.book.renderTo(this.epubContainer, {
       width: width,
       height: height,
       spread: 'none', // Single page view
@@ -131,6 +138,7 @@ export class EpubReader extends BaseReader {
       this.book.destroy();
       this.book = null;
     }
+    this.epubContainer = null;
     this.spine = null;
     super.destroy();
   }
