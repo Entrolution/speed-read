@@ -1,42 +1,45 @@
 import { BaseReader } from './base-reader';
+import type {
+  ZipEntry,
+  WorkerResponse,
+  ParseResponse,
+  ExtractResponse,
+} from '../workers/zip-extractor.worker';
 
 /**
- * Supported image extensions in CBZ files
- */
-const IMAGE_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'];
-
-/**
- * Check if a filename is an image
- */
-function isImageFile(filename: string): boolean {
-  const lower = filename.toLowerCase();
-  return IMAGE_EXTENSIONS.some((ext) => lower.endsWith(ext));
-}
-
-/**
- * Natural sort for filenames (handles numbered files correctly)
- */
-function naturalSort(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
-}
-
-/**
- * CBZ (Comic Book ZIP) reader
- * Uses the browser's native CompressionStream API when available,
- * falls back to a minimal ZIP parser for broader support
+ * CBZ (Comic Book ZIP) reader with lazy loading and Web Worker extraction
+ *
+ * - Parses ZIP metadata upfront (fast)
+ * - Extracts images on-demand in Web Worker
+ * - LRU cache prevents memory bloat
+ * - Preloads adjacent pages for smooth navigation
  */
 export class CbzReader extends BaseReader {
-  private images: { name: string; blob: Blob }[] = [];
+  private worker: Worker | null = null;
+  private entries: ZipEntry[] = [];
   private currentImage: HTMLImageElement | null = null;
   private currentPageNum = 1;
   private onPageChangeCallback?: (page: number, total: number) => void;
-  private objectUrls: string[] = [];
+
+  // LRU cache for extracted images
+  private readonly maxCacheSize = 5;
+  private imageCache: Map<number, { blob: Blob; url: string }> = new Map();
+  private cacheOrder: number[] = [];
+
+  // Track pending extractions to avoid duplicates
+  private pendingExtractions: Map<number, Promise<Blob>> = new Map();
 
   async load(data: ArrayBuffer, container: HTMLElement): Promise<void> {
-    // Parse the ZIP file and extract images
-    this.images = await this.extractImages(data);
+    // Create worker
+    this.worker = new Worker(
+      new URL('../workers/zip-extractor.worker.ts', import.meta.url),
+      { type: 'module' }
+    );
 
-    if (this.images.length === 0) {
+    // Parse ZIP metadata (doesn't extract images yet)
+    this.entries = await this.parseZip(data);
+
+    if (this.entries.length === 0) {
       throw new Error('No images found in CBZ file');
     }
 
@@ -57,6 +60,133 @@ export class CbzReader extends BaseReader {
 
     // Initialize controller
     this.initController(container, this.onPageChangeCallback);
+
+    // Preload adjacent pages in background
+    this.preloadAdjacent(1);
+  }
+
+  /**
+   * Parse ZIP in worker - returns metadata only, no extraction
+   */
+  private parseZip(data: ArrayBuffer): Promise<ZipEntry[]> {
+    return new Promise((resolve, reject) => {
+      if (!this.worker) {
+        reject(new Error('Worker not initialized'));
+        return;
+      }
+
+      const handler = (e: MessageEvent<WorkerResponse>) => {
+        this.worker?.removeEventListener('message', handler);
+
+        if (e.data.type === 'parsed') {
+          resolve((e.data as ParseResponse).entries);
+        } else if (e.data.type === 'error') {
+          reject(new Error(e.data.message));
+        }
+      };
+
+      this.worker.addEventListener('message', handler);
+      this.worker.postMessage({ type: 'parse', data }, [data]);
+    });
+  }
+
+  /**
+   * Extract a single image from the ZIP via worker
+   */
+  private extractImage(index: number): Promise<Blob> {
+    // Return cached if available
+    const cached = this.imageCache.get(index);
+    if (cached) {
+      this.updateCacheOrder(index);
+      return Promise.resolve(cached.blob);
+    }
+
+    // Return pending extraction if already in progress
+    const pending = this.pendingExtractions.get(index);
+    if (pending) {
+      return pending;
+    }
+
+    // Start new extraction
+    const extraction = new Promise<Blob>((resolve, reject) => {
+      if (!this.worker) {
+        reject(new Error('Worker not initialized'));
+        return;
+      }
+
+      const handler = (e: MessageEvent<WorkerResponse>) => {
+        if (e.data.type === 'extracted' && (e.data as ExtractResponse).index === index) {
+          this.worker?.removeEventListener('message', handler);
+          this.pendingExtractions.delete(index);
+
+          const response = e.data as ExtractResponse;
+          const blob = new Blob([response.data]);
+
+          // Add to cache
+          this.addToCache(index, blob);
+
+          resolve(blob);
+        } else if (e.data.type === 'error') {
+          this.worker?.removeEventListener('message', handler);
+          this.pendingExtractions.delete(index);
+          reject(new Error(e.data.message));
+        }
+      };
+
+      this.worker.addEventListener('message', handler);
+      this.worker.postMessage({ type: 'extract', index });
+    });
+
+    this.pendingExtractions.set(index, extraction);
+    return extraction;
+  }
+
+  /**
+   * Add image to LRU cache, evicting old entries if needed
+   */
+  private addToCache(index: number, blob: Blob): void {
+    // Evict if at capacity
+    while (this.imageCache.size >= this.maxCacheSize && this.cacheOrder.length > 0) {
+      const evictIndex = this.cacheOrder.shift()!;
+      const evicted = this.imageCache.get(evictIndex);
+      if (evicted) {
+        URL.revokeObjectURL(evicted.url);
+        this.imageCache.delete(evictIndex);
+      }
+    }
+
+    // Create Object URL and cache
+    const url = URL.createObjectURL(blob);
+    this.imageCache.set(index, { blob, url });
+    this.cacheOrder.push(index);
+  }
+
+  /**
+   * Update LRU order - move to end (most recently used)
+   */
+  private updateCacheOrder(index: number): void {
+    const pos = this.cacheOrder.indexOf(index);
+    if (pos !== -1) {
+      this.cacheOrder.splice(pos, 1);
+      this.cacheOrder.push(index);
+    }
+  }
+
+  /**
+   * Preload adjacent pages in background
+   */
+  private preloadAdjacent(currentPage: number): void {
+    const pagesToPreload = [currentPage + 1, currentPage - 1, currentPage + 2];
+
+    for (const page of pagesToPreload) {
+      const index = page - 1;
+      if (index >= 0 && index < this.entries.length) {
+        // Fire and forget - preload in background
+        this.extractImage(index).catch(() => {
+          // Ignore preload errors
+        });
+      }
+    }
   }
 
   /**
@@ -67,135 +197,60 @@ export class CbzReader extends BaseReader {
   }
 
   protected getPageCount(): number {
-    return this.images.length;
+    return this.entries.length;
   }
 
   protected async renderPage(pageNum: number): Promise<void> {
-    if (!this.currentImage || this.images.length === 0) return;
+    if (!this.currentImage || this.entries.length === 0) return;
 
-    pageNum = Math.max(1, Math.min(pageNum, this.images.length));
+    pageNum = Math.max(1, Math.min(pageNum, this.entries.length));
     this.currentPageNum = pageNum;
 
-    const image = this.images[pageNum - 1];
-    const url = URL.createObjectURL(image.blob);
-    this.objectUrls.push(url);
+    const index = pageNum - 1;
+
+    // Extract image (from cache or worker)
+    await this.extractImage(index);
+    const cached = this.imageCache.get(index);
+
+    if (!cached) {
+      throw new Error('Image not in cache after extraction');
+    }
 
     // Wait for image to load
     await new Promise<void>((resolve, reject) => {
       this.currentImage!.onload = () => resolve();
-      this.currentImage!.onerror = () => reject(new Error(`Failed to load image: ${image.name}`));
-      this.currentImage!.src = url;
+      this.currentImage!.onerror = () => reject(new Error(`Failed to load image: ${this.entries[index].name}`));
+      this.currentImage!.src = cached.url;
     });
 
     // Fire callback
     if (this.onPageChangeCallback) {
       this.onPageChangeCallback(pageNum, this.getPageCount());
     }
-  }
 
-  /**
-   * Extract images from ZIP data using Central Directory
-   * This is more robust than parsing local file headers
-   */
-  private async extractImages(data: ArrayBuffer): Promise<{ name: string; blob: Blob }[]> {
-    const view = new DataView(data);
-    const bytes = new Uint8Array(data);
-    const images: { name: string; blob: Blob }[] = [];
-
-    // Find End of Central Directory record (search from end)
-    let eocdOffset = -1;
-    for (let i = data.byteLength - 22; i >= 0; i--) {
-      if (view.getUint32(i, true) === 0x06054b50) {
-        eocdOffset = i;
-        break;
-      }
-    }
-
-    if (eocdOffset === -1) {
-      console.error('Could not find End of Central Directory record');
-      return [];
-    }
-
-    const cdOffset = view.getUint32(eocdOffset + 16, true);
-    const cdEntries = view.getUint16(eocdOffset + 10, true);
-
-    // Parse Central Directory
-    let offset = cdOffset;
-    for (let i = 0; i < cdEntries && offset < eocdOffset; i++) {
-      const sig = view.getUint32(offset, true);
-      if (sig !== 0x02014b50) break; // Central directory file header signature
-
-      const compressionMethod = view.getUint16(offset + 10, true);
-      const compressedSize = view.getUint32(offset + 20, true);
-      const filenameLength = view.getUint16(offset + 28, true);
-      const extraLength = view.getUint16(offset + 30, true);
-      const commentLength = view.getUint16(offset + 32, true);
-      const localHeaderOffset = view.getUint32(offset + 42, true);
-
-      const filename = new TextDecoder().decode(bytes.slice(offset + 46, offset + 46 + filenameLength));
-
-      // Move to next central directory entry
-      offset += 46 + filenameLength + extraLength + commentLength;
-
-      // Skip directories and non-image files
-      if (!filename.endsWith('/') && isImageFile(filename)) {
-        // Read from local file header to get actual data location
-        const localExtraLength = view.getUint16(localHeaderOffset + 28, true);
-        const dataStart = localHeaderOffset + 30 + filenameLength + localExtraLength;
-        const fileData = bytes.slice(dataStart, dataStart + compressedSize);
-
-        let blob: Blob;
-
-        if (compressionMethod === 0) {
-          // Stored (no compression)
-          blob = new Blob([fileData]);
-        } else if (compressionMethod === 8) {
-          // Deflate compression
-          if (typeof DecompressionStream !== 'undefined') {
-            try {
-              const ds = new DecompressionStream('deflate-raw');
-              const writer = ds.writable.getWriter();
-              writer.write(fileData);
-              writer.close();
-
-              const reader = ds.readable.getReader();
-              const chunks: ArrayBuffer[] = [];
-              let result = await reader.read();
-              while (!result.done) {
-                const value = result.value;
-                chunks.push(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength));
-                result = await reader.read();
-              }
-              blob = new Blob(chunks);
-            } catch (err) {
-              console.warn(`Failed to decompress: ${filename}`, err);
-              continue;
-            }
-          } else {
-            console.warn(`DecompressionStream unavailable, skipping: ${filename}`);
-            continue;
-          }
-        } else {
-          console.warn(`Unsupported compression method ${compressionMethod}: ${filename}`);
-          continue;
-        }
-
-        images.push({ name: filename, blob });
-      }
-    }
-
-    // Sort images by filename (natural sort for proper page order)
-    images.sort((a, b) => naturalSort(a.name, b.name));
-
-    return images;
+    // Preload adjacent pages
+    this.preloadAdjacent(pageNum);
   }
 
   destroy(): void {
-    // Clean up object URLs
-    this.objectUrls.forEach((url) => URL.revokeObjectURL(url));
-    this.objectUrls = [];
-    this.images = [];
+    // Terminate worker
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+    }
+
+    // Clean up all cached Object URLs
+    for (const [, cached] of this.imageCache) {
+      URL.revokeObjectURL(cached.url);
+    }
+    this.imageCache.clear();
+    this.cacheOrder = [];
+    this.pendingExtractions.clear();
+
+    this.entries = [];
     this.currentImage = null;
+    this.onPageChangeCallback = undefined;
+
     super.destroy();
   }
 }

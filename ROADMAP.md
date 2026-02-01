@@ -44,10 +44,10 @@
 - [x] Reduced motion support
 
 ### 2.3 Performance
-- [ ] Canvas pooling for PDF/CBZ
-- [ ] Image lazy loading for CBZ
-- [ ] Preload adjacent pages
-- [ ] Web Worker for heavy operations
+- [x] Canvas pooling for PDF/CBZ (PDF already optimized, CBZ uses LRU cache)
+- [x] Image lazy loading for CBZ (on-demand extraction)
+- [x] Preload adjacent pages (CBZ preloads next 2 pages)
+- [x] Web Worker for heavy operations (CBZ extraction in worker)
 - [ ] Bundle size optimization audit
 
 ### 2.4 Testing
