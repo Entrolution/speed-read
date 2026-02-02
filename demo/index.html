@@ -211,6 +211,7 @@
         <button onclick="loadSample('epub')" id="btn-epub">Load Sample EPUB</button>
         <button onclick="loadSample('pdf')" id="btn-pdf">Load Sample PDF</button>
         <button onclick="loadSample('cbz')" id="btn-cbz">Load Sample CBZ</button>
+        <button onclick="loadTumblr()" id="btn-tumblr" style="background: #35465c; border-color: #35465c;">Load Tumblr Post</button>
       </div>
 
       <div class="divider"><span>or</span></div>
@@ -289,6 +290,20 @@
       epub: { url: `./samples/alice.epub?v=${v}`, name: 'Alice in Wonderland (EPUB)' },
       pdf: { url: `./samples/sample.pdf?v=${v}`, name: 'Sample Document (PDF)' },
       cbz: { url: `./samples/sample.cbz?v=${v}`, name: 'Sample Comic (CBZ)' }
+    };
+
+    // Tumblr test URL
+    const tumblrUrl = 'https://www.tumblr.com/revelboo/762688045814317056/everything-is-alright-pt1';
+
+    // Make loadTumblr available globally
+    window.loadTumblr = async function() {
+      status.textContent = `Loading Tumblr post...`;
+      status.style.background = '#f0f0f0';
+      status.style.color = '#666';
+
+      // Set the tumblr attribute on the reader
+      reader.setAttribute('tumblr', tumblrUrl);
+      readerContainer.style.display = 'block';
     };
 
     // Make loadSample available globally

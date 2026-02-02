@@ -166,6 +166,12 @@ export class ReaderToolbar extends LitElement {
   @property({ type: Boolean })
   canGoNext = false;
 
+  @property({ type: Boolean })
+  showZoom = true;
+
+  @property({ type: Boolean })
+  showLayout = true;
+
   @state()
   private minimized = true;
 
@@ -203,6 +209,7 @@ export class ReaderToolbar extends LitElement {
 
   override render() {
     const zoomPercent = Math.round(this.zoomLevel * 100);
+    const hasExpandableControls = this.hasToc || this.showZoom || this.showLayout;
 
     return html`
       <nav
@@ -227,38 +234,47 @@ export class ReaderToolbar extends LitElement {
               `
             : ''}
 
-          <button
-            class="toolbar-btn"
-            @click=${this.handleZoomOut}
-            aria-label="Zoom out"
-            title="Zoom out"
-            ?disabled=${this.zoomLevel <= 0.5}
-          >
-            −
-          </button>
-          <span class="zoom-display" aria-label="Current zoom level">${zoomPercent}%</span>
-          <button
-            class="toolbar-btn"
-            @click=${this.handleZoomIn}
-            aria-label="Zoom in"
-            title="Zoom in"
-            ?disabled=${this.zoomLevel >= 3.0}
-          >
-            +
-          </button>
+          ${this.showZoom
+            ? html`
+                <button
+                  class="toolbar-btn"
+                  @click=${this.handleZoomOut}
+                  aria-label="Zoom out"
+                  title="Zoom out"
+                  ?disabled=${this.zoomLevel <= 0.5}
+                >
+                  −
+                </button>
+                <span class="zoom-display" aria-label="Current zoom level">${zoomPercent}%</span>
+                <button
+                  class="toolbar-btn"
+                  @click=${this.handleZoomIn}
+                  aria-label="Zoom in"
+                  title="Zoom in"
+                  ?disabled=${this.zoomLevel >= 3.0}
+                >
+                  +
+                </button>
+                <div class="separator" aria-hidden="true"></div>
+              `
+            : ''}
 
-          <div class="separator" aria-hidden="true"></div>
+          ${this.showLayout
+            ? html`
+                <button
+                  class="toolbar-btn ${this.layout === '1-page' ? 'toolbar-btn--active' : ''}"
+                  @click=${this.handleLayoutToggle}
+                  aria-label=${this.layout === '1-page' ? 'Switch to two-page view' : 'Switch to single-page view'}
+                  title=${this.layout === '1-page' ? 'Two-page view' : 'Single-page view'}
+                >
+                  ${this.layout === '1-page' ? '⊡' : '⊟'}
+                </button>
+                <div class="separator" aria-hidden="true"></div>
+              `
+            : ''}
 
-          <button
-            class="toolbar-btn ${this.layout === '1-page' ? 'toolbar-btn--active' : ''}"
-            @click=${this.handleLayoutToggle}
-            aria-label=${this.layout === '1-page' ? 'Switch to two-page view' : 'Switch to single-page view'}
-            title=${this.layout === '1-page' ? 'Two-page view' : 'Single-page view'}
-          >
-            ${this.layout === '1-page' ? '⊡' : '⊟'}
-          </button>
-
-          <div class="separator" aria-hidden="true"></div>
+          <!-- Slot for custom controls -->
+          <slot></slot>
         </div>
 
         <!-- Always visible navigation controls -->
@@ -286,30 +302,32 @@ export class ReaderToolbar extends LitElement {
           ›
         </button>
 
-        <!-- Expand/Minimize toggle -->
-        ${this.minimized
-          ? html`
-              <div class="separator" aria-hidden="true"></div>
-              <button
-                class="toolbar-btn"
-                @click=${this.handleExpand}
-                aria-label="Show more controls"
-                title="More controls"
-              >
-                ⋯
-              </button>
-            `
-          : html`
-              <div class="separator" aria-hidden="true"></div>
-              <button
-                class="toolbar-btn"
-                @click=${this.handleMinimize}
-                aria-label="Hide controls"
-                title="Minimize"
-              >
-                ×
-              </button>
-            `}
+        <!-- Expand/Minimize toggle (only show if there are expandable controls) -->
+        ${hasExpandableControls
+          ? this.minimized
+            ? html`
+                <div class="separator" aria-hidden="true"></div>
+                <button
+                  class="toolbar-btn"
+                  @click=${this.handleExpand}
+                  aria-label="Show more controls"
+                  title="More controls"
+                >
+                  ⋯
+                </button>
+              `
+            : html`
+                <div class="separator" aria-hidden="true"></div>
+                <button
+                  class="toolbar-btn"
+                  @click=${this.handleMinimize}
+                  aria-label="Hide controls"
+                  title="Minimize"
+                >
+                  ×
+                </button>
+              `
+          : ''}
       </nav>
     `;
   }
