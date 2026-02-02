@@ -1,7 +1,24 @@
 import { LitElement, html, css, PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { ReaderEngine } from '@/core/engine';
-import type { ReaderError } from '@/types';
+import { ZoomController, DisplayController } from '@/core/controller';
+import type { ReaderError, TocItem, FitMode, LayoutMode, FormatReader } from '@/types';
+
+// Import UI components (registers custom elements)
+import './ui/toolbar';
+import './ui/toc-panel';
+
+// Extended FormatReader interface with optional methods
+interface ExtendedReader extends FormatReader {
+  getToc?(): TocItem[];
+  goToTocItem?(item: TocItem): Promise<void>;
+  getZoom?(): number;
+  setZoom?(level: number): void;
+  getFitMode?(): FitMode;
+  setFitMode?(mode: FitMode): void;
+  getLayout?(): LayoutMode;
+  setLayout?(layout: LayoutMode): void;
+}
 
 /**
  * Speed Reader Web Component
@@ -10,6 +27,7 @@ import type { ReaderError } from '@/types';
  *
  * @attr {string} src - URL to the document file
  * @attr {string} manifest - URL to the chapters.json manifest
+ * @attr {boolean} locked - Lock to the specified src/manifest, disabling file uploads
  *
  * @fires error - Fired when an error occurs
  * @fires pagechange - Fired when page changes
@@ -24,6 +42,8 @@ import type { ReaderError } from '@/types';
  * @cssprop [--speed-reader-accent=#0066cc] - Accent color for controls
  * @cssprop [--speed-reader-error-bg=#fff0f0] - Error background color
  * @cssprop [--speed-reader-error-text=#cc0000] - Error text color
+ * @cssprop [--speed-reader-toc-width=280px] - TOC panel width
+ * @cssprop [--speed-reader-page-gap=20px] - Gap between pages in 2-page layout
  */
 @customElement('speed-reader')
 export class SpeedReader extends LitElement {
@@ -67,12 +87,59 @@ export class SpeedReader extends LitElement {
       flex: 1;
       overflow: auto;
       position: relative;
-      min-height: 0; /* Important for flex child to respect container bounds */
+      min-height: 0;
+      touch-action: pan-x pan-y pinch-zoom;
+      /* Enable momentum scrolling on iOS */
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Show scrollbars when content overflows */
+    .reader-content.has-overflow {
+      overflow: scroll;
+    }
+
+    /* Persistent scrollbar styling */
+    .reader-content::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+
+    .reader-content::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 6px;
+    }
+
+    .reader-content::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+
+    .reader-content::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 0, 0, 0.3);
+      background-clip: padding-box;
     }
 
     .reader-content:focus {
       outline: 2px solid var(--speed-reader-accent, #0066cc);
       outline-offset: -2px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .reader-content::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .reader-content::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        background-clip: padding-box;
+      }
+
+      .reader-content::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+        background-clip: padding-box;
+      }
     }
 
     /* Screen reader only - for live announcements */
@@ -88,59 +155,8 @@ export class SpeedReader extends LitElement {
       border: 0;
     }
 
-    .controls {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 1rem;
-      padding: 0.5rem;
-      background: var(--speed-reader-bg, #ffffff);
-      border-top: 1px solid #e0e0e0;
-    }
-
-    .controls button {
-      padding: 0.5rem 1rem;
-      border: 2px solid var(--speed-reader-accent, #0066cc);
-      background: transparent;
-      color: var(--speed-reader-accent, #0066cc);
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 1rem;
-      transition: background 0.2s, color 0.2s;
-    }
-
-    .controls button:focus {
-      outline: 2px solid var(--speed-reader-accent, #0066cc);
-      outline-offset: 2px;
-    }
-
-    .controls button:hover:not(:disabled) {
-      background: var(--speed-reader-accent, #0066cc);
-      color: white;
-    }
-
-    .controls button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-
-    .page-info {
-      font-size: 0.875rem;
-      color: var(--speed-reader-text, #000000);
-      opacity: 0.7;
-    }
-
     /* High contrast mode support */
     @media (prefers-contrast: more) {
-      .controls button {
-        border-width: 3px;
-      }
-
-      .controls button:disabled {
-        opacity: 0.7;
-        text-decoration: line-through;
-      }
-
       .reader-content:focus {
         outline-width: 3px;
       }
@@ -148,10 +164,6 @@ export class SpeedReader extends LitElement {
 
     /* Reduced motion support */
     @media (prefers-reduced-motion: reduce) {
-      .controls button {
-        transition: none;
-      }
-
       .speed-reader-spinner {
         animation: none;
         border-top-color: var(--speed-reader-accent, #0066cc);
@@ -241,6 +253,13 @@ export class SpeedReader extends LitElement {
   @property({ type: String })
   manifest?: string;
 
+  /**
+   * Lock the reader to the specified src/manifest, preventing file uploads
+   * When true, the loadFile() method will be disabled
+   */
+  @property({ type: Boolean, reflect: true })
+  locked = false;
+
   @state()
   private currentPage = 0;
 
@@ -259,17 +278,68 @@ export class SpeedReader extends LitElement {
   @state()
   private error: ReaderError | null = null;
 
+  @state()
+  private tocOpen = false;
+
+  @state()
+  private tocItems: TocItem[] = [];
+
+  @state()
+  private zoomLevel = 1.0;
+
+  @state()
+  private layoutMode: LayoutMode = '1-page';
+
   private engine: ReaderEngine | null = null;
   private contentRef: HTMLElement | null = null;
+  private zoomController: ZoomController;
+  private displayController: DisplayController;
+  private boundKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private boundResizeHandler: (() => void) | null = null;
+
+  constructor() {
+    super();
+    this.zoomController = new ZoomController();
+    this.displayController = new DisplayController();
+
+    // Sync zoom controller changes to component state
+    this.zoomController.setOnChange((level) => {
+      this.zoomLevel = level;
+      this.applyZoomToReader();
+    });
+
+    this.displayController.setOnChange(() => {
+      this.layoutMode = this.displayController.getLayout();
+      this.applyLayoutToReader();
+    });
+  }
 
   override connectedCallback(): void {
     super.connectedCallback();
+
+    // Set up keyboard shortcuts
+    this.boundKeyHandler = this.handleKeyDown.bind(this);
+    document.addEventListener('keydown', this.boundKeyHandler);
+
+    // Set up resize handler for responsive layout
+    this.boundResizeHandler = this.handleResize.bind(this);
+    window.addEventListener('resize', this.boundResizeHandler);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this.engine?.destroy();
     this.engine = null;
+
+    if (this.boundKeyHandler) {
+      document.removeEventListener('keydown', this.boundKeyHandler);
+      this.boundKeyHandler = null;
+    }
+
+    if (this.boundResizeHandler) {
+      window.removeEventListener('resize', this.boundResizeHandler);
+      this.boundResizeHandler = null;
+    }
   }
 
   override firstUpdated(): void {
@@ -291,6 +361,12 @@ export class SpeedReader extends LitElement {
 
     this.isLoading = true;
     this.error = null;
+    this.tocItems = [];
+    this.tocOpen = false;
+
+    // Reset controllers
+    this.zoomController.reset();
+    this.displayController.reset();
 
     // Clean up previous engine
     this.engine?.destroy();
@@ -322,9 +398,123 @@ export class SpeedReader extends LitElement {
           this.currentPage = nav.currentPage;
           this.totalPages = nav.totalPages;
         }
+
+        // Load TOC from reader
+        this.loadToc();
+
+        // Check overflow state
+        requestAnimationFrame(() => {
+          this.updateOverflowState();
+        });
+
         this.dispatchEvent(new CustomEvent('ready'));
       },
     });
+  }
+
+  /**
+   * Load TOC from the current reader
+   */
+  private loadToc(): void {
+    const reader = this.getReader();
+    if (reader?.getToc) {
+      this.tocItems = reader.getToc();
+    }
+  }
+
+  /**
+   * Get the current format reader with extended methods
+   */
+  private getReader(): ExtendedReader | null {
+    // Access the reader through the engine
+    // The engine exposes the reader indirectly through its interface
+    const engineAny = this.engine as unknown as { reader?: ExtendedReader };
+    return engineAny?.reader ?? null;
+  }
+
+  /**
+   * Apply zoom level to the current reader
+   */
+  private applyZoomToReader(): void {
+    const reader = this.getReader();
+    if (reader?.setZoom) {
+      reader.setZoom(this.zoomLevel);
+    }
+
+    // Update overflow state after DOM updates
+    requestAnimationFrame(() => {
+      this.updateOverflowState();
+    });
+  }
+
+  /**
+   * Check if content overflows and update scrollbar visibility
+   */
+  private updateOverflowState(): void {
+    if (!this.contentRef) return;
+
+    const hasOverflow =
+      this.contentRef.scrollWidth > this.contentRef.clientWidth ||
+      this.contentRef.scrollHeight > this.contentRef.clientHeight;
+
+    if (hasOverflow) {
+      this.contentRef.classList.add('has-overflow');
+    } else {
+      this.contentRef.classList.remove('has-overflow');
+    }
+  }
+
+  /**
+   * Apply layout mode to the current reader
+   */
+  private applyLayoutToReader(): void {
+    const reader = this.getReader();
+    if (reader?.setLayout) {
+      reader.setLayout(this.layoutMode);
+    }
+
+    // Update overflow state after DOM updates
+    requestAnimationFrame(() => {
+      this.updateOverflowState();
+    });
+  }
+
+  /**
+   * Handle keyboard shortcuts
+   */
+  private handleKeyDown(e: KeyboardEvent): void {
+    // Ignore if typing in an input
+    if (
+      e.target instanceof HTMLInputElement ||
+      e.target instanceof HTMLTextAreaElement
+    ) {
+      return;
+    }
+
+    const isMod = e.metaKey || e.ctrlKey;
+
+    // Zoom shortcuts
+    if (isMod && (e.key === '+' || e.key === '=')) {
+      e.preventDefault();
+      this.handleZoomIn();
+    } else if (isMod && e.key === '-') {
+      e.preventDefault();
+      this.handleZoomOut();
+    } else if (isMod && e.key === '0') {
+      e.preventDefault();
+      this.zoomController.reset();
+    }
+  }
+
+  /**
+   * Handle window resize for responsive layout
+   */
+  private handleResize(): void {
+    // Auto-switch to single-page layout on narrow viewports
+    const width = window.innerWidth;
+    if (width < 768 && this.layoutMode === '2-page') {
+      this.displayController.setLayout('1-page');
+    }
   }
 
   private async handlePrev(): Promise<void> {
@@ -335,14 +525,53 @@ export class SpeedReader extends LitElement {
     await this.engine?.next();
   }
 
+  private handleTocToggle(): void {
+    this.tocOpen = !this.tocOpen;
+  }
+
+  private handleTocClose(): void {
+    this.tocOpen = false;
+  }
+
+  private async handleTocSelect(e: CustomEvent<TocItem>): Promise<void> {
+    const item = e.detail;
+    const reader = this.getReader();
+
+    if (reader?.goToTocItem) {
+      await reader.goToTocItem(item);
+    }
+
+    this.tocOpen = false;
+  }
+
+  private handleZoomIn(): void {
+    this.zoomController.zoomIn();
+  }
+
+  private handleZoomOut(): void {
+    this.zoomController.zoomOut();
+  }
+
+  private handleLayoutToggle(): void {
+    const newLayout = this.layoutMode === '1-page' ? '2-page' : '1-page';
+    this.displayController.setLayout(newLayout);
+  }
+
   /**
    * Load a file directly (for drag-drop or file picker)
+   * This method is disabled when the `locked` property is true
    */
   async loadFile(file: File | Blob): Promise<void> {
+    if (this.locked) {
+      console.warn('SpeedReader: loadFile() is disabled when locked=true');
+      return;
+    }
     if (!this.contentRef) return;
 
     this.isLoading = true;
     this.error = null;
+    this.tocItems = [];
+    this.tocOpen = false;
 
     this.engine?.destroy();
     this.engine = new ReaderEngine();
@@ -366,6 +595,14 @@ export class SpeedReader extends LitElement {
           this.currentPage = nav.currentPage;
           this.totalPages = nav.totalPages;
         }
+
+        this.loadToc();
+
+        // Check overflow state
+        requestAnimationFrame(() => {
+          this.updateOverflowState();
+        });
+
         this.dispatchEvent(new CustomEvent('ready'));
       },
     });
@@ -381,6 +618,7 @@ export class SpeedReader extends LitElement {
   override render() {
     const canGoPrev = this.currentPage > 1 || this.currentChapter > 1;
     const canGoNext = this.currentPage < this.totalPages || this.currentChapter < this.totalChapters;
+    const hasToc = this.tocItems.length > 0;
 
     return html`
       <a href="#speed-reader-controls" class="skip-link">Skip to controls</a>
@@ -390,6 +628,14 @@ export class SpeedReader extends LitElement {
         role="application"
         aria-label="Document reader"
       >
+        <!-- TOC Panel -->
+        <toc-panel
+          .items=${this.tocItems}
+          ?open=${this.tocOpen}
+          @close=${this.handleTocClose}
+          @toc-select=${this.handleTocSelect}
+        ></toc-panel>
+
         <!-- Live region for screen reader announcements -->
         <div
           class="sr-only"
@@ -409,36 +655,24 @@ export class SpeedReader extends LitElement {
 
         ${!this.isLoading && !this.error
           ? html`
-              <nav
+              <reader-toolbar
                 id="speed-reader-controls"
-                class="controls"
                 part="controls"
-                role="toolbar"
-                aria-label="Document navigation"
-              >
-                <button
-                  @click=${this.handlePrev}
-                  ?disabled=${!canGoPrev}
-                  aria-label="Go to previous page"
-                  aria-keyshortcuts="ArrowLeft"
-                >
-                  Previous
-                </button>
-                <span class="page-info" aria-hidden="true">
-                  ${this.totalChapters > 0
-                    ? html`Ch ${this.currentChapter}/${this.totalChapters} &middot; `
-                    : ''}
-                  Page ${this.currentPage} / ${this.totalPages}
-                </span>
-                <button
-                  @click=${this.handleNext}
-                  ?disabled=${!canGoNext}
-                  aria-label="Go to next page"
-                  aria-keyshortcuts="ArrowRight Space"
-                >
-                  Next
-                </button>
-              </nav>
+                .currentPage=${this.currentPage}
+                .totalPages=${this.totalPages}
+                .zoomLevel=${this.zoomLevel}
+                .layout=${this.layoutMode}
+                .hasToc=${hasToc}
+                .tocOpen=${this.tocOpen}
+                .canGoPrev=${canGoPrev}
+                .canGoNext=${canGoNext}
+                @toc-toggle=${this.handleTocToggle}
+                @zoom-in=${this.handleZoomIn}
+                @zoom-out=${this.handleZoomOut}
+                @layout-toggle=${this.handleLayoutToggle}
+                @prev=${this.handlePrev}
+                @next=${this.handleNext}
+              ></reader-toolbar>
             `
           : ''}
       </div>

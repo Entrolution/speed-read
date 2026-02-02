@@ -5,6 +5,7 @@ import type {
   ParseResponse,
   ExtractResponse,
 } from '../workers/zip-extractor.worker';
+import type { TocItem, FitMode, LayoutMode } from '@/types';
 
 /**
  * CBZ (Comic Book ZIP) reader with lazy loading and Web Worker extraction
@@ -18,6 +19,7 @@ export class CbzReader extends BaseReader {
   private worker: Worker | null = null;
   private entries: ZipEntry[] = [];
   private currentImage: HTMLImageElement | null = null;
+  private secondImage: HTMLImageElement | null = null; // For 2-page layout
   private currentPageNum = 1;
   private onPageChangeCallback?: (page: number, total: number) => void;
 
@@ -28,6 +30,13 @@ export class CbzReader extends BaseReader {
 
   // Track pending extractions to avoid duplicates
   private pendingExtractions: Map<number, Promise<Blob>> = new Map();
+
+  // Zoom and layout state
+  private zoomLevel = 1.0;
+  private fitMode: FitMode = 'page';
+  private layoutMode: LayoutMode = '1-page';
+  private cachedToc: TocItem[] | null = null;
+  private pagesContainer: HTMLDivElement | null = null;
 
   async load(data: ArrayBuffer, container: HTMLElement): Promise<void> {
     // Create worker
@@ -43,14 +52,33 @@ export class CbzReader extends BaseReader {
       throw new Error('No images found in CBZ file');
     }
 
-    // Create image element
+    // Create container for pages
+    // Use inline-flex with margin:auto for centering that doesn't clip overflow
+    this.pagesContainer = document.createElement('div');
+    this.pagesContainer.className = 'speed-reader-cbz-pages';
+    this.pagesContainer.style.cssText = `
+      display: inline-flex;
+      align-items: flex-start;
+      gap: var(--speed-reader-page-gap, 20px);
+      padding: 10px;
+      box-sizing: border-box;
+      margin: auto;
+    `;
+
+    // Create image elements
     this.currentImage = document.createElement('img');
     this.currentImage.className = 'speed-reader-cbz-image';
-    this.currentImage.style.cssText = 'max-width: 100%; max-height: 100%; object-fit: contain;';
+    this.currentImage.style.cssText = 'max-width: 100%; max-height: 100%; object-fit: contain; display: block; flex-shrink: 0;';
 
-    // Clear container and add image
+    this.secondImage = document.createElement('img');
+    this.secondImage.className = 'speed-reader-cbz-image';
+    this.secondImage.style.cssText = 'max-width: 100%; max-height: 100%; object-fit: contain; display: none; flex-shrink: 0;';
+
+    // Clear container and add images
     container.innerHTML = '';
-    container.appendChild(this.currentImage);
+    this.pagesContainer.appendChild(this.currentImage);
+    this.pagesContainer.appendChild(this.secondImage);
+    container.appendChild(this.pagesContainer);
 
     this.container = container;
     this.isLoaded = true;
@@ -204,17 +232,25 @@ export class CbzReader extends BaseReader {
     if (!this.currentImage || this.entries.length === 0) return;
 
     pageNum = Math.max(1, Math.min(pageNum, this.entries.length));
-    this.currentPageNum = pageNum;
 
+    // In 2-page mode, ensure we start on an odd page (left side)
+    if (this.layoutMode === '2-page' && pageNum % 2 === 0 && pageNum > 1) {
+      pageNum = pageNum - 1;
+    }
+
+    this.currentPageNum = pageNum;
     const index = pageNum - 1;
 
-    // Extract image (from cache or worker)
+    // Extract and display first image
     await this.extractImage(index);
     const cached = this.imageCache.get(index);
 
     if (!cached) {
       throw new Error('Image not in cache after extraction');
     }
+
+    // Apply zoom styling
+    this.applyZoomStyles(this.currentImage);
 
     // Wait for image to load
     await new Promise<void>((resolve, reject) => {
@@ -223,6 +259,30 @@ export class CbzReader extends BaseReader {
       this.currentImage!.src = cached.url;
     });
 
+    // Handle second page for 2-page layout
+    if (this.layoutMode === '2-page' && this.secondImage) {
+      const nextIndex = index + 1;
+      if (nextIndex < this.entries.length) {
+        await this.extractImage(nextIndex);
+        const cached2 = this.imageCache.get(nextIndex);
+
+        if (cached2) {
+          this.applyZoomStyles(this.secondImage);
+          this.secondImage.style.display = 'block';
+
+          await new Promise<void>((resolve, reject) => {
+            this.secondImage!.onload = () => resolve();
+            this.secondImage!.onerror = () => reject(new Error(`Failed to load image: ${this.entries[nextIndex].name}`));
+            this.secondImage!.src = cached2.url;
+          });
+        }
+      } else {
+        this.secondImage.style.display = 'none';
+      }
+    } else if (this.secondImage) {
+      this.secondImage.style.display = 'none';
+    }
+
     // Fire callback
     if (this.onPageChangeCallback) {
       this.onPageChangeCallback(pageNum, this.getPageCount());
@@ -230,6 +290,137 @@ export class CbzReader extends BaseReader {
 
     // Preload adjacent pages
     this.preloadAdjacent(pageNum);
+  }
+
+  /**
+   * Apply zoom styles to an image element
+   * Uses actual width/height instead of transforms to enable native scrolling
+   */
+  private applyZoomStyles(img: HTMLImageElement): void {
+    // Reset all zoom-related styles first
+    img.style.transform = '';
+    img.style.width = '';
+    img.style.height = '';
+    img.style.minWidth = '';
+    img.style.minHeight = '';
+
+    if (this.fitMode === 'none') {
+      // Manual zoom - use percentage width based on zoom level
+      // This creates actual overflow for scrolling
+      const zoomPercent = this.zoomLevel * 100;
+      img.style.maxWidth = 'none';
+      img.style.maxHeight = 'none';
+      img.style.width = `${zoomPercent}%`;
+      img.style.height = 'auto';
+      img.style.objectFit = 'contain';
+    } else if (this.fitMode === 'width') {
+      // Fit to width - image fills container width
+      img.style.maxWidth = '100%';
+      img.style.maxHeight = 'none';
+      img.style.width = '100%';
+      img.style.height = 'auto';
+      img.style.objectFit = 'contain';
+    } else {
+      // 'page' mode - fit within container
+      img.style.maxWidth = '100%';
+      img.style.maxHeight = '100%';
+      img.style.width = 'auto';
+      img.style.height = 'auto';
+      img.style.objectFit = 'contain';
+    }
+  }
+
+  /**
+   * Get pseudo table of contents from folder structure
+   * Groups images by folder name
+   */
+  getToc(): TocItem[] {
+    if (this.cachedToc) {
+      return this.cachedToc;
+    }
+
+    const folders = new Map<string, { startPage: number; count: number }>();
+    let idCounter = 0;
+
+    this.entries.forEach((entry, index) => {
+      // Extract folder name from path
+      const parts = entry.name.split('/');
+      const folder = parts.length > 1 ? parts[parts.length - 2] : 'Root';
+
+      if (!folders.has(folder)) {
+        folders.set(folder, { startPage: index + 1, count: 1 });
+      } else {
+        folders.get(folder)!.count++;
+      }
+    });
+
+    // Convert folders to TOC items
+    this.cachedToc = Array.from(folders.entries()).map(([name, info]) => ({
+      id: `cbz-toc-${idCounter++}`,
+      label: `${name} (${info.count} pages)`,
+      page: info.startPage,
+      level: 0,
+    }));
+
+    return this.cachedToc;
+  }
+
+  /**
+   * Navigate to a TOC item
+   */
+  async goToTocItem(item: TocItem): Promise<void> {
+    if (item.page) {
+      await this.pageController.goTo(item.page);
+    }
+  }
+
+  /**
+   * Get current zoom level
+   */
+  getZoom(): number {
+    return this.zoomLevel;
+  }
+
+  /**
+   * Set zoom level
+   */
+  setZoom(level: number): void {
+    this.zoomLevel = Math.max(0.5, Math.min(3.0, level));
+    this.fitMode = 'none';
+    // Re-render current page
+    this.renderPage(this.currentPageNum);
+  }
+
+  /**
+   * Get current fit mode
+   */
+  getFitMode(): FitMode {
+    return this.fitMode;
+  }
+
+  /**
+   * Set fit mode
+   */
+  setFitMode(mode: FitMode): void {
+    this.fitMode = mode;
+    // Re-render current page
+    this.renderPage(this.currentPageNum);
+  }
+
+  /**
+   * Get current layout mode
+   */
+  getLayout(): LayoutMode {
+    return this.layoutMode;
+  }
+
+  /**
+   * Set layout mode (1-page or 2-page)
+   */
+  setLayout(layout: LayoutMode): void {
+    this.layoutMode = layout;
+    // Re-render current page
+    this.renderPage(this.currentPageNum);
   }
 
   destroy(): void {
@@ -249,6 +440,9 @@ export class CbzReader extends BaseReader {
 
     this.entries = [];
     this.currentImage = null;
+    this.secondImage = null;
+    this.pagesContainer = null;
+    this.cachedToc = null;
     this.onPageChangeCallback = undefined;
 
     super.destroy();

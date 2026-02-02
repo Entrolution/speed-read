@@ -117,8 +117,8 @@ test.describe('Navigation', () => {
     });
 
     test('displays comic image', async ({ page }) => {
-      // Check that an image is displayed
-      await expect(page.locator('.speed-reader-cbz-image')).toBeVisible({ timeout: 10000 });
+      // Check that an image is displayed (use .first() as there may be 2 images for 2-page layout)
+      await expect(page.locator('.speed-reader-cbz-image').first()).toBeVisible({ timeout: 10000 });
     });
   });
 });

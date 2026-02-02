@@ -1,5 +1,12 @@
 import { BaseReader } from './base-reader';
-import type { ReaderNavigation } from '@/types';
+import type { ReaderNavigation, TocItem, FitMode, LayoutMode } from '@/types';
+
+// foliate-js TOC item structure
+interface FoliateTocItem {
+  href: string;
+  label: string;
+  subitems?: FoliateTocItem[];
+}
 
 // Import foliate-js types and functions
 // The library uses ES modules and registers the foliate-view custom element
@@ -14,6 +21,7 @@ type FoliateView = HTMLElement & {
   renderer?: {
     pages: number;
     page: number;
+    setStyles?: (css: string) => void;
   };
   book?: {
     sections: unknown[];
@@ -21,6 +29,7 @@ type FoliateView = HTMLElement & {
       title?: string;
       creator?: string;
     };
+    toc?: FoliateTocItem[];
   };
   lastLocation?: {
     fraction?: number;
@@ -28,6 +37,7 @@ type FoliateView = HTMLElement & {
     section?: { current: number; total: number };
     tocItem?: { label: string };
   };
+  style: CSSStyleDeclaration;
 };
 
 /**
@@ -45,6 +55,12 @@ export class EpubReader extends BaseReader {
   // Event handlers stored for cleanup
   private boundKeyHandler: ((e: KeyboardEvent) => void) | null = null;
   private boundRelocateHandler: EventListener | null = null;
+
+  // Zoom and layout state
+  private zoomLevel = 1.0;
+  private fitMode: FitMode = 'page';
+  private layoutMode: LayoutMode = '1-page';
+  private cachedToc: TocItem[] | null = null;
 
   async load(data: ArrayBuffer, container: HTMLElement): Promise<void> {
     // Import foliate-js view module (registers foliate-view custom element)
@@ -236,6 +252,123 @@ export class EpubReader extends BaseReader {
     return nav;
   }
 
+  /**
+   * Get table of contents from the EPUB
+   */
+  getToc(): TocItem[] {
+    if (this.cachedToc) {
+      return this.cachedToc;
+    }
+
+    const toc = this.view?.book?.toc;
+    if (!toc) {
+      return [];
+    }
+
+    let idCounter = 0;
+    const convertTocItem = (item: FoliateTocItem, level: number): TocItem => {
+      const tocItem: TocItem = {
+        id: `epub-toc-${idCounter++}`,
+        label: item.label,
+        href: item.href,
+        level,
+      };
+
+      if (item.subitems && item.subitems.length > 0) {
+        tocItem.children = item.subitems.map(sub => convertTocItem(sub, level + 1));
+      }
+
+      return tocItem;
+    };
+
+    this.cachedToc = toc.map(item => convertTocItem(item, 0));
+    return this.cachedToc;
+  }
+
+  /**
+   * Navigate to a TOC item
+   */
+  async goToTocItem(item: TocItem): Promise<void> {
+    if (this.view && item.href) {
+      await this.view.goTo(item.href);
+    }
+  }
+
+  /**
+   * Get current zoom level
+   */
+  getZoom(): number {
+    return this.zoomLevel;
+  }
+
+  /**
+   * Set zoom level
+   */
+  setZoom(level: number): void {
+    this.zoomLevel = Math.max(0.5, Math.min(3.0, level));
+    this.fitMode = 'none';
+    this.applyZoom();
+  }
+
+  /**
+   * Get current fit mode
+   */
+  getFitMode(): FitMode {
+    return this.fitMode;
+  }
+
+  /**
+   * Set fit mode
+   */
+  setFitMode(mode: FitMode): void {
+    this.fitMode = mode;
+    this.applyZoom();
+  }
+
+  /**
+   * Get current layout mode
+   */
+  getLayout(): LayoutMode {
+    return this.layoutMode;
+  }
+
+  /**
+   * Set layout mode (1-page or 2-page)
+   */
+  setLayout(layout: LayoutMode): void {
+    this.layoutMode = layout;
+    this.applyLayout();
+  }
+
+  /**
+   * Apply zoom to the view
+   */
+  private applyZoom(): void {
+    if (!this.view || !this.wrapper || !this.container) return;
+
+    if (this.fitMode === 'page' || this.fitMode === 'width') {
+      // Reset transform and let CSS handle fitting
+      this.view.style.transform = '';
+      this.view.style.transformOrigin = '';
+      this.wrapper.style.overflow = 'hidden';
+    } else {
+      // Apply manual zoom
+      this.view.style.transform = `scale(${this.zoomLevel})`;
+      this.view.style.transformOrigin = 'top left';
+      this.wrapper.style.overflow = 'auto';
+    }
+  }
+
+  /**
+   * Apply layout mode
+   */
+  private applyLayout(): void {
+    // foliate-js handles column layout internally
+    // We would need to configure this when opening the book
+    // For now, this is a placeholder - real implementation would
+    // need to reload the book with different column settings
+  }
+
   destroy(): void {
     // Remove event listeners
     if (this.boundKeyHandler) {
@@ -265,6 +398,7 @@ export class EpubReader extends BaseReader {
     }
     this.totalLocations = 0;
     this.currentLocation = 1;
+    this.cachedToc = null;
     super.destroy();
   }
 }
