@@ -21,7 +21,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          registry-url: 'https://registry.npmjs.org'
           cache: 'npm'
 
       - name: Install dependencies
@@ -33,8 +32,10 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Publish to npm
-        run: npm publish --access public
+      - name: Publish to npm (OIDC)
+        run: npm publish --access public --provenance
+        env:
+          NPM_CONFIG_PROVENANCE: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
