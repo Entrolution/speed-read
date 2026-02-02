@@ -64,14 +64,16 @@ export class CbzReader extends BaseReader {
       margin: auto;
     `;
 
-    // Create image elements
+    // Create image elements with decoding="async" for non-blocking decode
     this.currentImage = document.createElement('img');
     this.currentImage.className = 'speed-reader-cbz-image';
     this.currentImage.style.cssText = 'max-width: 100%; max-height: 100%; object-fit: contain; display: block; flex-shrink: 0;';
+    this.currentImage.decoding = 'async';
 
     this.secondImage = document.createElement('img');
     this.secondImage.className = 'speed-reader-cbz-image';
     this.secondImage.style.cssText = 'max-width: 100%; max-height: 100%; object-fit: contain; display: none; flex-shrink: 0;';
+    this.secondImage.decoding = 'async';
 
     // Clear container and add images
     container.innerHTML = '';
