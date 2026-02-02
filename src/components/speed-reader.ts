@@ -555,6 +555,7 @@ export class SpeedReader extends LitElement {
   private displayController: DisplayController;
   private boundKeyHandler: ((e: KeyboardEvent) => void) | null = null;
   private boundResizeHandler: (() => void) | null = null;
+  private resizeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     super();
@@ -600,6 +601,11 @@ export class SpeedReader extends LitElement {
     if (this.boundResizeHandler) {
       window.removeEventListener('resize', this.boundResizeHandler);
       this.boundResizeHandler = null;
+    }
+
+    if (this.resizeTimer) {
+      clearTimeout(this.resizeTimer);
+      this.resizeTimer = null;
     }
   }
 
@@ -855,14 +861,21 @@ export class SpeedReader extends LitElement {
   }
 
   /**
-   * Handle window resize for responsive layout
+   * Handle window resize for responsive layout (debounced)
    */
   private handleResize(): void {
-    // Auto-switch to single-page layout on narrow viewports
-    const width = window.innerWidth;
-    if (width < 768 && this.layoutMode === '2-page') {
-      this.displayController.setLayout('1-page');
+    if (this.resizeTimer) {
+      clearTimeout(this.resizeTimer);
     }
+
+    this.resizeTimer = setTimeout(() => {
+      // Auto-switch to single-page layout on narrow viewports
+      const width = window.innerWidth;
+      if (width < 768 && this.layoutMode === '2-page') {
+        this.displayController.setLayout('1-page');
+      }
+      this.resizeTimer = null;
+    }, 150);
   }
 
   private async handlePrev(): Promise<void> {

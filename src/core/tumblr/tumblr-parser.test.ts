@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { parseTumblrData, parseTumblrPage } from './tumblr-parser';
 import type { FetchResult, TumblrApiResponse } from './tumblr-fetcher';
 

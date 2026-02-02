@@ -13,7 +13,6 @@ import type {
 import {
   fetchTumblrData,
   parseTumblrData,
-  parseNavigationFromHtml,
   TumblrCache,
   generateEpub,
   type FetchResult,
@@ -354,14 +353,9 @@ export class TumblrReader implements FormatReader {
    * Get navigation controls
    */
   getNavigation(): ReaderNavigation {
-    const self = this;
     return {
-      get currentPage() {
-        return self.historyIndex + 1;
-      },
-      get totalPages() {
-        return self.postHistory.length;
-      },
+      currentPage: this.historyIndex + 1,
+      totalPages: this.postHistory.length,
       next: () => this.next(),
       prev: () => this.prev(),
       goTo: (page: number) => this.goTo(page),
