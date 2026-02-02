@@ -1,3 +1,4 @@
+/// <reference types="../types/foliate-js" />
 import { BaseReader } from './base-reader';
 import type { ReaderNavigation, TocItem, FitMode, LayoutMode } from '@/types';
 
