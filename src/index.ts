@@ -33,4 +33,7 @@ export type {
   TocItem,
   FitMode,
   LayoutMode,
+  TumblrPost,
+  TumblrContentBlock,
+  ReblogEntry,
 } from './types';

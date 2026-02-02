@@ -4,6 +4,7 @@ export { BaseReader } from './base-reader';
 export { EpubReader } from './epub-reader';
 export { PdfReader } from './pdf-reader';
 export { CbzReader } from './cbz-reader';
+export { TumblrReader } from './tumblr-reader';
 
 /**
  * Dynamically load the appropriate reader for a format

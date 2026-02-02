@@ -166,6 +166,43 @@ export interface ValidationResult {
 }
 
 /**
+ * Tumblr content block types
+ */
+export interface TumblrContentBlock {
+  type: 'text' | 'image' | 'heading1' | 'heading2' | 'link' | 'video' | 'audio';
+  text?: string;
+  url?: string;
+  subtype?: string;
+}
+
+/**
+ * Reblog entry in a Tumblr post's trail
+ */
+export interface ReblogEntry {
+  blogName: string;
+  blogUrl: string;
+  content: TumblrContentBlock[];
+  timestamp?: number;
+}
+
+/**
+ * Parsed Tumblr post data
+ */
+export interface TumblrPost {
+  id: string;
+  title?: string;
+  content: TumblrContentBlock[];
+  reblogTrail: ReblogEntry[];
+  headerImage?: string;
+  nextPostUrl?: string;
+  prevPostUrl?: string;
+  blogName: string;
+  blogUrl: string;
+  timestamp: number;
+  tags: string[];
+}
+
+/**
  * File size limits by format (in bytes)
  */
 export const MAX_FILE_SIZES: Record<DocumentFormat, number> = {
