@@ -1,6 +1,6 @@
 # Speed-Read
 
-Lightweight, embeddable document reader for EPUB, PDF, and CBZ. Add a reader to any webpage in one line of code.
+Lightweight, embeddable document reader for EPUB, PDF, CBZ, and Tumblr posts. Add a reader to any webpage in one line of code.
 
 [![npm](https://img.shields.io/npm/v/@entrolution/speed-read)](https://www.npmjs.com/package/@entrolution/speed-read)
 [![CI](https://github.com/entrolution/speed-read/actions/workflows/ci.yml/badge.svg)](https://github.com/entrolution/speed-read/actions/workflows/ci.yml)
@@ -9,9 +9,10 @@ Lightweight, embeddable document reader for EPUB, PDF, and CBZ. Add a reader to 
 ## Features
 
 - **Lightweight**: ~13KB initial load, format libraries loaded on-demand
-- **Multi-format**: EPUB, PDF, CBZ support
+- **Multi-format**: EPUB, PDF, CBZ, and Tumblr post support
 - **Dual export**: Web Component and React
 - **Episodic content**: Chapter manifest support for serial content
+- **Tumblr series**: Navigate through linked Tumblr post series with caching
 - **Themeable**: CSS custom properties for styling
 - **Accessible**: Keyboard and touch navigation
 
@@ -55,6 +56,23 @@ function App() {
 }
 ```
 
+### Tumblr Posts
+
+Read Tumblr post series with automatic navigation between linked posts:
+
+```html
+<speed-reader tumblr="https://www.tumblr.com/username/post-id/slug"></speed-reader>
+```
+
+Posts are fetched via CORS proxy and cached locally. Use a custom proxy if needed:
+
+```html
+<speed-reader
+  tumblr="https://www.tumblr.com/username/post-id/slug"
+  tumblr-proxy="https://my-cors-proxy.com/?url=">
+</speed-reader>
+```
+
 ## Installation
 
 ```bash
@@ -85,6 +103,8 @@ Or use via CDN:
 |-----------|------|-------------|
 | `src` | string | URL to document file |
 | `manifest` | string | URL to chapters manifest |
+| `tumblr` | string | Tumblr post URL |
+| `tumblr-proxy` | string | Custom CORS proxy URL (optional) |
 
 #### Events
 
@@ -118,6 +138,8 @@ function App() {
 |------|------|-------------|
 | `src` | `string \| File \| Blob` | Document source |
 | `manifest` | `string` | Manifest URL |
+| `tumblr` | `string` | Tumblr post URL |
+| `tumblrProxy` | `string` | Custom CORS proxy URL |
 | `onReady` | `() => void` | Called when ready |
 | `onPageChange` | `(page, total) => void` | Page change callback |
 | `onChapterChange` | `(chapter, total) => void` | Chapter change callback |
@@ -181,9 +203,10 @@ speed-reader {
 
 | Format | Extension | Library |
 |--------|-----------|---------|
-| EPUB | `.epub` | epub.js |
+| EPUB | `.epub` | foliate-js |
 | PDF | `.pdf` | pdf.js |
-| CBZ | `.cbz` | Native ZIP parsing |
+| CBZ | `.cbz` | JSZip + Web Worker |
+| Tumblr | URL | CORS proxy + caching |
 
 ## Bundle Size
 
@@ -193,6 +216,7 @@ speed-reader {
 | + EPUB | ~80KB |
 | + PDF | ~200KB |
 | + CBZ | ~30KB |
+| + Tumblr | ~8KB |
 
 Format libraries are loaded dynamically, only when needed.
 
