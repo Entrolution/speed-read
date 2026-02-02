@@ -53,18 +53,26 @@ export class CbzReader extends BaseReader {
     }
 
     // Create container for pages
+    // Use inline-flex with margin:auto for centering that doesn't clip overflow
     this.pagesContainer = document.createElement('div');
     this.pagesContainer.className = 'speed-reader-cbz-pages';
-    this.pagesContainer.style.cssText = 'display: flex; justify-content: center; align-items: center; height: 100%; gap: var(--speed-reader-page-gap, 20px);';
+    this.pagesContainer.style.cssText = `
+      display: inline-flex;
+      align-items: flex-start;
+      gap: var(--speed-reader-page-gap, 20px);
+      padding: 10px;
+      box-sizing: border-box;
+      margin: auto;
+    `;
 
     // Create image elements
     this.currentImage = document.createElement('img');
     this.currentImage.className = 'speed-reader-cbz-image';
-    this.currentImage.style.cssText = 'max-width: 100%; max-height: 100%; object-fit: contain;';
+    this.currentImage.style.cssText = 'max-width: 100%; max-height: 100%; object-fit: contain; display: block; flex-shrink: 0;';
 
     this.secondImage = document.createElement('img');
     this.secondImage.className = 'speed-reader-cbz-image';
-    this.secondImage.style.cssText = 'max-width: 100%; max-height: 100%; object-fit: contain; display: none;';
+    this.secondImage.style.cssText = 'max-width: 100%; max-height: 100%; object-fit: contain; display: none; flex-shrink: 0;';
 
     // Clear container and add images
     container.innerHTML = '';
@@ -286,27 +294,39 @@ export class CbzReader extends BaseReader {
 
   /**
    * Apply zoom styles to an image element
+   * Uses actual width/height instead of transforms to enable native scrolling
    */
   private applyZoomStyles(img: HTMLImageElement): void {
+    // Reset all zoom-related styles first
+    img.style.transform = '';
+    img.style.width = '';
+    img.style.height = '';
+    img.style.minWidth = '';
+    img.style.minHeight = '';
+
     if (this.fitMode === 'none') {
-      // Manual zoom - apply transform
-      img.style.transform = `scale(${this.zoomLevel})`;
-      img.style.transformOrigin = 'top left';
+      // Manual zoom - use percentage width based on zoom level
+      // This creates actual overflow for scrolling
+      const zoomPercent = this.zoomLevel * 100;
       img.style.maxWidth = 'none';
       img.style.maxHeight = 'none';
+      img.style.width = `${zoomPercent}%`;
+      img.style.height = 'auto';
+      img.style.objectFit = 'contain';
+    } else if (this.fitMode === 'width') {
+      // Fit to width - image fills container width
+      img.style.maxWidth = '100%';
+      img.style.maxHeight = 'none';
+      img.style.width = '100%';
+      img.style.height = 'auto';
+      img.style.objectFit = 'contain';
     } else {
-      // Fit mode - reset transform, use CSS containment
-      img.style.transform = '';
-      img.style.transformOrigin = '';
-
-      if (this.fitMode === 'width') {
-        img.style.maxWidth = '100%';
-        img.style.maxHeight = 'none';
-      } else {
-        // 'page' mode
-        img.style.maxWidth = '100%';
-        img.style.maxHeight = '100%';
-      }
+      // 'page' mode - fit within container
+      img.style.maxWidth = '100%';
+      img.style.maxHeight = '100%';
+      img.style.width = 'auto';
+      img.style.height = 'auto';
+      img.style.objectFit = 'contain';
     }
   }
 

@@ -56,26 +56,26 @@ describe('ZoomController', () => {
   });
 
   describe('zoomIn', () => {
-    it('should increase zoom level by 10%', () => {
+    it('should increase zoom level by 5%', () => {
       controller.zoomIn();
-      expect(controller.getLevel()).toBeCloseTo(1.1, 5);
+      expect(controller.getLevel()).toBeCloseTo(1.05, 5);
     });
 
     it('should not exceed maximum zoom', () => {
-      controller.setLevel(2.95);
+      controller.setLevel(2.98);
       controller.zoomIn();
       expect(controller.getLevel()).toBe(3.0);
     });
   });
 
   describe('zoomOut', () => {
-    it('should decrease zoom level by 10%', () => {
+    it('should decrease zoom level by 5%', () => {
       controller.zoomOut();
-      expect(controller.getLevel()).toBeCloseTo(0.9, 5);
+      expect(controller.getLevel()).toBeCloseTo(0.95, 5);
     });
 
     it('should not go below minimum zoom', () => {
-      controller.setLevel(0.55);
+      controller.setLevel(0.52);
       controller.zoomOut();
       expect(controller.getLevel()).toBe(0.5);
     });

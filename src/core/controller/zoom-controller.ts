@@ -11,7 +11,7 @@ export class ZoomController {
 
   static readonly MIN_ZOOM = 0.5;
   static readonly MAX_ZOOM = 3.0;
-  static readonly ZOOM_STEP = 0.1;
+  static readonly ZOOM_STEP = 0.05; // 5% steps for smoother transitions
 
   /**
    * Set callback for zoom changes

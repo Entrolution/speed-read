@@ -27,6 +27,7 @@ interface ExtendedReader extends FormatReader {
  *
  * @attr {string} src - URL to the document file
  * @attr {string} manifest - URL to the chapters.json manifest
+ * @attr {boolean} locked - Lock to the specified src/manifest, disabling file uploads
  *
  * @fires error - Fired when an error occurs
  * @fires pagechange - Fired when page changes
@@ -87,12 +88,58 @@ export class SpeedReader extends LitElement {
       overflow: auto;
       position: relative;
       min-height: 0;
-      touch-action: pan-x pan-y;
+      touch-action: pan-x pan-y pinch-zoom;
+      /* Enable momentum scrolling on iOS */
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* Show scrollbars when content overflows */
+    .reader-content.has-overflow {
+      overflow: scroll;
+    }
+
+    /* Persistent scrollbar styling */
+    .reader-content::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+
+    .reader-content::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+      border-radius: 6px;
+    }
+
+    .reader-content::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+
+    .reader-content::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 0, 0, 0.3);
+      background-clip: padding-box;
     }
 
     .reader-content:focus {
       outline: 2px solid var(--speed-reader-accent, #0066cc);
       outline-offset: -2px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .reader-content::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      .reader-content::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        background-clip: padding-box;
+      }
+
+      .reader-content::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.3);
+        background-clip: padding-box;
+      }
     }
 
     /* Screen reader only - for live announcements */
@@ -205,6 +252,13 @@ export class SpeedReader extends LitElement {
    */
   @property({ type: String })
   manifest?: string;
+
+  /**
+   * Lock the reader to the specified src/manifest, preventing file uploads
+   * When true, the loadFile() method will be disabled
+   */
+  @property({ type: Boolean, reflect: true })
+  locked = false;
 
   @state()
   private currentPage = 0;
@@ -348,6 +402,11 @@ export class SpeedReader extends LitElement {
         // Load TOC from reader
         this.loadToc();
 
+        // Check overflow state
+        requestAnimationFrame(() => {
+          this.updateOverflowState();
+        });
+
         this.dispatchEvent(new CustomEvent('ready'));
       },
     });
@@ -381,6 +440,28 @@ export class SpeedReader extends LitElement {
     if (reader?.setZoom) {
       reader.setZoom(this.zoomLevel);
     }
+
+    // Update overflow state after DOM updates
+    requestAnimationFrame(() => {
+      this.updateOverflowState();
+    });
+  }
+
+  /**
+   * Check if content overflows and update scrollbar visibility
+   */
+  private updateOverflowState(): void {
+    if (!this.contentRef) return;
+
+    const hasOverflow =
+      this.contentRef.scrollWidth > this.contentRef.clientWidth ||
+      this.contentRef.scrollHeight > this.contentRef.clientHeight;
+
+    if (hasOverflow) {
+      this.contentRef.classList.add('has-overflow');
+    } else {
+      this.contentRef.classList.remove('has-overflow');
+    }
   }
 
   /**
@@ -391,6 +472,11 @@ export class SpeedReader extends LitElement {
     if (reader?.setLayout) {
       reader.setLayout(this.layoutMode);
     }
+
+    // Update overflow state after DOM updates
+    requestAnimationFrame(() => {
+      this.updateOverflowState();
+    });
   }
 
   /**
@@ -473,8 +559,13 @@ export class SpeedReader extends LitElement {
 
   /**
    * Load a file directly (for drag-drop or file picker)
+   * This method is disabled when the `locked` property is true
    */
   async loadFile(file: File | Blob): Promise<void> {
+    if (this.locked) {
+      console.warn('SpeedReader: loadFile() is disabled when locked=true');
+      return;
+    }
     if (!this.contentRef) return;
 
     this.isLoading = true;
@@ -506,6 +597,12 @@ export class SpeedReader extends LitElement {
         }
 
         this.loadToc();
+
+        // Check overflow state
+        requestAnimationFrame(() => {
+          this.updateOverflowState();
+        });
+
         this.dispatchEvent(new CustomEvent('ready'));
       },
     });
