@@ -164,29 +164,82 @@ function extractNavigationFromContent(content: TumblrContentBlock[]): {
       }
     }
 
-    // Apply extracted URLs
+    // Apply extracted URLs and track which links to remove
+    const linksToRemove: string[] = [];
     for (const { url, isNext } of extractedUrls) {
       if (isNext && !nextPostUrl) {
         nextPostUrl = url;
+        linksToRemove.push(url);
       } else if (!isNext && !prevPostUrl) {
         prevPostUrl = url;
+        linksToRemove.push(url);
       }
     }
 
-    // If the entire block is just navigation (only contains nav links), skip it
-    // Otherwise keep the block but the links are now also in navigation
-    if (isNavBlock) {
-      // Check if block is ONLY navigation (no other significant content)
-      const strippedText = text
-        .replace(/<a[^>]*>.*?<\/a>/gi, '')
+    // If the block contains navigation links, strip them from the HTML
+    if (isNavBlock && linksToRemove.length > 0 && text.includes('<a')) {
+      // Remove the navigation links from the HTML
+      let cleanedText = text;
+
+      // Parse and rebuild without nav links
+      if (typeof DOMParser !== 'undefined') {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/html');
+        const links = doc.querySelectorAll('a[href]');
+
+        links.forEach(link => {
+          const href = link.getAttribute('href') || '';
+          if (linksToRemove.some(url => href.includes(url) || url.includes(href))) {
+            // Remove the link and any surrounding separator text
+            const parent = link.parentElement;
+            if (parent) {
+              // Check if parent only contains this link and separators
+              const siblings = Array.from(parent.childNodes);
+              const linkIndex = siblings.indexOf(link);
+
+              // Remove preceding separator (like " | " or " - ")
+              if (linkIndex > 0) {
+                const prevNode = siblings[linkIndex - 1];
+                if (prevNode.nodeType === Node.TEXT_NODE) {
+                  const prevText = prevNode.textContent || '';
+                  if (/^[\s|•·\-–—]+$/.test(prevText) || /[\s|•·\-–—]+$/.test(prevText)) {
+                    prevNode.textContent = prevText.replace(/[\s|•·\-–—]+$/, '');
+                  }
+                }
+              }
+
+              // Remove following separator
+              if (linkIndex < siblings.length - 1) {
+                const nextNode = siblings[linkIndex + 1];
+                if (nextNode.nodeType === Node.TEXT_NODE) {
+                  const nextText = nextNode.textContent || '';
+                  if (/^[\s|•·\-–—]+$/.test(nextText) || /^[\s|•·\-–—]+/.test(nextText)) {
+                    nextNode.textContent = nextText.replace(/^[\s|•·\-–—]+/, '');
+                  }
+                }
+              }
+            }
+            link.remove();
+          }
+        });
+
+        cleanedText = doc.body.innerHTML;
+      }
+
+      // Check if anything meaningful remains
+      const strippedText = cleanedText
         .replace(/<[^>]+>/g, '')
         .replace(/[|\-–—•·]/g, '')
         .trim();
 
-      if (strippedText.length < 10) {
-        // Block is mostly just nav links, skip it
+      if (strippedText.length < 5) {
+        // Block is now empty or just separators, skip it
         continue;
       }
+
+      // Keep the cleaned block
+      filteredContent.push({ ...block, text: cleanedText });
+      continue;
     }
 
     filteredContent.push(block);
