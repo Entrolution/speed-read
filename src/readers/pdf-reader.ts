@@ -29,6 +29,9 @@ export class PdfReader extends BaseReader {
   private cachedToc: TocItem[] | null = null;
   private pagesContainer: HTMLDivElement | null = null;
 
+  // Cache for page viewport dimensions (avoids repeated getViewport calls)
+  private viewportCache: Map<number, { width: number; height: number }> = new Map();
+
   async load(data: ArrayBuffer, container: HTMLElement): Promise<void> {
     // Dynamic import pdf.js
     const pdfjsLib = await import('pdfjs-dist');
@@ -172,11 +175,20 @@ export class PdfReader extends BaseReader {
 
   /**
    * Calculate render scale based on fit mode and zoom level
+   * Uses cached viewport dimensions to avoid redundant getViewport calls
    */
   private calculateScale(page: Awaited<ReturnType<PDFDocumentProxy['getPage']>>): number {
     if (!this.container) return this.zoomLevel;
 
-    const defaultViewport = page.getViewport({ scale: 1 });
+    // Get cached dimensions or compute and cache them
+    const pageNum = page.pageNumber;
+    let dimensions = this.viewportCache.get(pageNum);
+    if (!dimensions) {
+      const defaultViewport = page.getViewport({ scale: 1 });
+      dimensions = { width: defaultViewport.width, height: defaultViewport.height };
+      this.viewportCache.set(pageNum, dimensions);
+    }
+
     const containerWidth = this.container.clientWidth;
     const containerHeight = this.container.clientHeight;
 
@@ -190,11 +202,11 @@ export class PdfReader extends BaseReader {
 
     switch (this.fitMode) {
       case 'width':
-        baseScale = availableWidth / defaultViewport.width;
+        baseScale = availableWidth / dimensions.width;
         break;
       case 'page': {
-        const scaleX = availableWidth / defaultViewport.width;
-        const scaleY = containerHeight / defaultViewport.height;
+        const scaleX = availableWidth / dimensions.width;
+        const scaleY = containerHeight / dimensions.height;
         baseScale = Math.min(scaleX, scaleY);
         break;
       }
@@ -360,6 +372,7 @@ export class PdfReader extends BaseReader {
     this.ctx2 = null;
     this.pagesContainer = null;
     this.cachedToc = null;
+    this.viewportCache.clear();
     super.destroy();
   }
 }

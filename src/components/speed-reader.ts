@@ -647,11 +647,39 @@ export class SpeedReader extends LitElement {
     if (!this.contentRef) return;
     if (!this.src && !this.manifest && !this.tumblr) return;
 
+    this.resetReaderState();
+
+    // Check if this is a Tumblr URL
+    if (this.tumblr) {
+      await this.loadTumblr(this.tumblr);
+      return;
+    }
+
+    await this.initEngine(this.src, this.manifest);
+  }
+
+  /**
+   * Reset common reader state before loading new content
+   * Uses guards to avoid unnecessary re-renders for unchanged values
+   */
+  private resetReaderState(): void {
     this.isLoading = true;
     this.error = null;
-    this.tocItems = [];
-    this.tocOpen = false;
-    this.isTumblrMode = false;
+    if (this.tocItems.length > 0) {
+      this.tocItems = [];
+    }
+    if (this.tocOpen) {
+      this.tocOpen = false;
+    }
+    if (this.isTumblrMode) {
+      this.isTumblrMode = false;
+    }
+    if (this.tumblrCanPrev) {
+      this.tumblrCanPrev = false;
+    }
+    if (this.tumblrCanNext) {
+      this.tumblrCanNext = false;
+    }
 
     // Reset controllers
     this.zoomController.reset();
@@ -662,18 +690,20 @@ export class SpeedReader extends LitElement {
     this.engine = null;
     this.tumblrReader?.destroy();
     this.tumblrReader = null;
+  }
 
-    // Check if this is a Tumblr URL
-    if (this.tumblr) {
-      await this.loadTumblr(this.tumblr);
-      return;
-    }
-
+  /**
+   * Initialize engine with source/manifest and standard callbacks
+   */
+  private async initEngine(
+    src?: string | File | Blob,
+    manifest?: string
+  ): Promise<void> {
     this.engine = new ReaderEngine();
 
-    await this.engine.init(this.contentRef, {
-      src: this.src,
-      manifest: this.manifest,
+    await this.engine.init(this.contentRef!, {
+      src,
+      manifest,
       onError: (error) => {
         this.error = error;
         this.isLoading = false;
@@ -697,10 +727,8 @@ export class SpeedReader extends LitElement {
           this.totalPages = nav.totalPages;
         }
 
-        // Load TOC from reader
         this.loadToc();
 
-        // Check overflow state
         requestAnimationFrame(() => {
           this.updateOverflowState();
         });
@@ -756,13 +784,17 @@ export class SpeedReader extends LitElement {
   }
 
   /**
-   * Update Tumblr navigation state
+   * Update Tumblr navigation state (guards against no-op updates)
    */
   private updateTumblrNavigation(): void {
     if (this.tumblrReader) {
       const nav = this.tumblrReader.hasNavigation();
-      this.tumblrCanPrev = nav.canPrev;
-      this.tumblrCanNext = nav.canNext;
+      if (this.tumblrCanPrev !== nav.canPrev) {
+        this.tumblrCanPrev = nav.canPrev;
+      }
+      if (this.tumblrCanNext !== nav.canNext) {
+        this.tumblrCanNext = nav.canNext;
+      }
     }
   }
 
@@ -936,11 +968,14 @@ export class SpeedReader extends LitElement {
   }
 
   /**
-   * Update the cached post count
+   * Update the cached post count (guards against no-op updates)
    */
   private updateCachedPostCount(): void {
     if (this.tumblrReader) {
-      this.cachedPostCount = this.tumblrReader.getCachedPostCount();
+      const count = this.tumblrReader.getCachedPostCount();
+      if (this.cachedPostCount !== count) {
+        this.cachedPostCount = count;
+      }
     }
   }
 
@@ -987,56 +1022,10 @@ export class SpeedReader extends LitElement {
     }
     if (!this.contentRef) return;
 
-    this.isLoading = true;
-    this.error = null;
-    this.tocItems = [];
-    this.tocOpen = false;
-
-    // Clean up Tumblr mode if active
-    this.isTumblrMode = false;
-    this.tumblrCanPrev = false;
-    this.tumblrCanNext = false;
-    this.tumblrReader?.destroy();
-    this.tumblrReader = null;
+    this.resetReaderState();
     this.tumblr = undefined; // Clear so it can be set again later
 
-    // Reset controllers
-    this.zoomController.reset();
-    this.displayController.reset();
-
-    this.engine?.destroy();
-    this.engine = new ReaderEngine();
-
-    await this.engine.init(this.contentRef, {
-      src: file,
-      onError: (error) => {
-        this.error = error;
-        this.isLoading = false;
-        this.dispatchEvent(new CustomEvent('error', { detail: error }));
-      },
-      onPageChange: (page, total) => {
-        this.currentPage = page;
-        this.totalPages = total;
-        this.dispatchEvent(new CustomEvent('pagechange', { detail: { page, total } }));
-      },
-      onReady: () => {
-        this.isLoading = false;
-        const nav = this.engine?.getNavigation();
-        if (nav) {
-          this.currentPage = nav.currentPage;
-          this.totalPages = nav.totalPages;
-        }
-
-        this.loadToc();
-
-        // Check overflow state
-        requestAnimationFrame(() => {
-          this.updateOverflowState();
-        });
-
-        this.dispatchEvent(new CustomEvent('ready'));
-      },
-    });
+    await this.initEngine(file);
   }
 
   private getPageAnnouncement(): string {
