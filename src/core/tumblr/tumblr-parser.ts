@@ -20,7 +20,7 @@ export function parseTumblrData(result: FetchResult, sourceUrl: string): TumblrP
 /**
  * Parse post from legacy JSON API response
  */
-function parseFromApi(response: TumblrApiResponse, sourceUrl: string): TumblrPost {
+function parseFromApi(response: TumblrApiResponse, _sourceUrl: string): TumblrPost {
   const post = response.posts[0];
   if (!post) {
     throw new Error('No post found in API response');
@@ -91,7 +91,7 @@ function extractNavigationFromContent(content: TumblrContentBlock[]): {
     // Check if this block contains navigation links
     const text = block.text || '';
     let isNavBlock = false;
-    let extractedUrls: { url: string; isNext: boolean }[] = [];
+    const extractedUrls: { url: string; isNext: boolean }[] = [];
 
     // Parse HTML to find links
     if (typeof DOMParser !== 'undefined' && text.includes('<a')) {
@@ -214,7 +214,7 @@ function parseApiContent(post: TumblrApiPost): TumblrContentBlock[] {
       }
       break;
 
-    case 'photo':
+    case 'photo': {
       // Photo posts
       const photoUrl = post['photo-url-1280'] || post['photo-url-500'];
       if (photoUrl) {
@@ -224,8 +224,9 @@ function parseApiContent(post: TumblrApiPost): TumblrContentBlock[] {
         content.push(...parseHtmlContent(post['photo-caption']));
       }
       break;
+    }
 
-    case 'quote':
+    case 'quote': {
       // Quote posts - format as blockquote
       const quoteText = post['quote-text'];
       const quoteSource = post['quote-source'];
@@ -236,8 +237,9 @@ function parseApiContent(post: TumblrApiPost): TumblrContentBlock[] {
         content.push({ type: 'text', text: `<em>— ${quoteSource}</em>` });
       }
       break;
+    }
 
-    case 'link':
+    case 'link': {
       // Link posts
       const linkUrl = post['link-url'];
       const linkText = post['link-text'];
@@ -253,16 +255,18 @@ function parseApiContent(post: TumblrApiPost): TumblrContentBlock[] {
         content.push(...parseHtmlContent(String(linkDesc)));
       }
       break;
+    }
 
-    case 'answer':
+    case 'answer': {
       // Ask/answer posts - just show the answer content
       const answer = post['answer'] as string | undefined;
       if (answer) {
         content.push(...parseHtmlContent(answer));
       }
       break;
+    }
 
-    case 'chat':
+    case 'chat': {
       // Chat/dialogue posts - format with speaker labels
       const dialogue = post['conversation'];
       const chatTitle = post['conversation-title'] as string | undefined;
@@ -281,8 +285,9 @@ function parseApiContent(post: TumblrApiPost): TumblrContentBlock[] {
         });
       }
       break;
+    }
 
-    case 'video':
+    case 'video': {
       // Video posts - try to extract source info
       const videoCaption = post['video-caption'];
       const videoSource = post['video-source'] as string | undefined;
@@ -299,8 +304,9 @@ function parseApiContent(post: TumblrApiPost): TumblrContentBlock[] {
         content.push(...parseHtmlContent(String(videoCaption)));
       }
       break;
+    }
 
-    case 'audio':
+    case 'audio': {
       // Audio posts - extract track info
       const audioCaption = post['audio-caption'];
       const audioArtist = post['id3-artist'] as string | undefined;
@@ -321,13 +327,15 @@ function parseApiContent(post: TumblrApiPost): TumblrContentBlock[] {
         content.push(...parseHtmlContent(String(audioCaption)));
       }
       break;
+    }
 
-    default:
+    default: {
       // Unknown type - try to extract any body content
       const body = post['body'] || post['regular-body'];
       if (body) {
         content.push(...parseHtmlContent(String(body)));
       }
+    }
   }
 
   return content;
@@ -505,8 +513,6 @@ function parseFromHtml(html: string, sourceUrl: string): TumblrPost {
     contentElement = doc.querySelector(selector);
     if (contentElement) break;
   }
-
-  const content: TumblrContentBlock[] = [];
 
   let parsedContent: TumblrContentBlock[] = [];
   if (contentElement) {

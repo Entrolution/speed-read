@@ -23,10 +23,9 @@ export class CbzReader extends BaseReader {
   private currentPageNum = 1;
   private onPageChangeCallback?: (page: number, total: number) => void;
 
-  // LRU cache for extracted images
+  // LRU cache for extracted images (uses lastAccess timestamp for O(1) updates)
   private readonly maxCacheSize = 5;
-  private imageCache: Map<number, { blob: Blob; url: string }> = new Map();
-  private cacheOrder: number[] = [];
+  private imageCache: Map<number, { blob: Blob; url: string; lastAccess: number }> = new Map();
 
   // Track pending extractions to avoid duplicates
   private pendingExtractions: Map<number, Promise<Blob>> = new Map();
@@ -122,10 +121,10 @@ export class CbzReader extends BaseReader {
    * Extract a single image from the ZIP via worker
    */
   private extractImage(index: number): Promise<Blob> {
-    // Return cached if available
+    // Return cached if available (update lastAccess for LRU)
     const cached = this.imageCache.get(index);
     if (cached) {
-      this.updateCacheOrder(index);
+      cached.lastAccess = performance.now();
       return Promise.resolve(cached.blob);
     }
 
@@ -170,34 +169,33 @@ export class CbzReader extends BaseReader {
   }
 
   /**
-   * Add image to LRU cache, evicting old entries if needed
+   * Add image to LRU cache, evicting oldest entry if needed
    */
   private addToCache(index: number, blob: Blob): void {
-    // Evict if at capacity
-    while (this.imageCache.size >= this.maxCacheSize && this.cacheOrder.length > 0) {
-      const evictIndex = this.cacheOrder.shift()!;
-      const evicted = this.imageCache.get(evictIndex);
-      if (evicted) {
-        URL.revokeObjectURL(evicted.url);
-        this.imageCache.delete(evictIndex);
+    // Evict oldest if at capacity
+    if (this.imageCache.size >= this.maxCacheSize) {
+      let oldestIndex = -1;
+      let oldestTime = Infinity;
+
+      for (const [idx, entry] of this.imageCache) {
+        if (entry.lastAccess < oldestTime) {
+          oldestTime = entry.lastAccess;
+          oldestIndex = idx;
+        }
+      }
+
+      if (oldestIndex !== -1) {
+        const evicted = this.imageCache.get(oldestIndex);
+        if (evicted) {
+          URL.revokeObjectURL(evicted.url);
+          this.imageCache.delete(oldestIndex);
+        }
       }
     }
 
     // Create Object URL and cache
     const url = URL.createObjectURL(blob);
-    this.imageCache.set(index, { blob, url });
-    this.cacheOrder.push(index);
-  }
-
-  /**
-   * Update LRU order - move to end (most recently used)
-   */
-  private updateCacheOrder(index: number): void {
-    const pos = this.cacheOrder.indexOf(index);
-    if (pos !== -1) {
-      this.cacheOrder.splice(pos, 1);
-      this.cacheOrder.push(index);
-    }
+    this.imageCache.set(index, { blob, url, lastAccess: performance.now() });
   }
 
   /**
@@ -435,7 +433,6 @@ export class CbzReader extends BaseReader {
       URL.revokeObjectURL(cached.url);
     }
     this.imageCache.clear();
-    this.cacheOrder = [];
     this.pendingExtractions.clear();
 
     this.entries = [];

@@ -472,7 +472,7 @@ function blockToXhtml(block: TumblrContentBlock, imageMap: Map<string, ImageInfo
       return `      <h1>${escapeXml(block.text || '')}</h1>`;
     case 'heading2':
       return `      <h2>${escapeXml(block.text || '')}</h2>`;
-    case 'image':
+    case 'image': {
       if (!block.url) return '';
       // Use local image if downloaded, otherwise fall back to URL
       const imageInfo = imageMap.get(block.url);
@@ -481,6 +481,7 @@ function blockToXhtml(block: TumblrContentBlock, imageMap: Map<string, ImageInfo
       }
       // Fallback to external URL (may not work in all readers)
       return `      <p><img src="${escapeXml(block.url)}" alt=""/></p>`;
+    }
     case 'link':
       return block.url
         ? `      <p><a href="${escapeXml(block.url)}">${escapeXml(block.text || block.url)}</a></p>`
