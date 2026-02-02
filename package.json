@@ -56,12 +56,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/entrolution/speed-read.git"
+    "url": "git+https://github.com/Entrolution/speed-read.git"
   },
   "bugs": {
-    "url": "https://github.com/entrolution/speed-read/issues"
+    "url": "https://github.com/Entrolution/speed-read/issues"
   },
-  "homepage": "https://entrolution.github.io/speed-read/",
+  "homepage": "https://Entrolution.github.io/speed-read/",
   "devDependencies": {
     "@playwright/test": "^1.58.1",
     "@types/node": "^20.11.0",
