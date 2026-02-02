@@ -126,6 +126,39 @@
       color: #999;
     }
 
+    .url-input-area {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .url-input-area input {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 0.875rem;
+    }
+
+    .url-input-area input:focus {
+      outline: none;
+      border-color: #0066cc;
+    }
+
+    .url-input-area button {
+      padding: 0.75rem 1.5rem;
+      border: 1px solid #35465c;
+      background: #35465c;
+      color: white;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: background 0.2s;
+    }
+
+    .url-input-area button:hover {
+      background: #2a3a4d;
+    }
+
     .reader-container {
       height: 600px;
       border: 1px solid #e0e0e0;
@@ -222,6 +255,13 @@
         <p class="formats">Supports: EPUB, PDF, CBZ</p>
       </div>
 
+      <div class="divider"><span>or enter a Tumblr URL</span></div>
+
+      <div class="url-input-area">
+        <input type="url" id="tumblrInput" placeholder="https://www.tumblr.com/username/post-id/slug">
+        <button onclick="loadTumblrUrl()" id="btn-load-url">Load</button>
+      </div>
+
       <div class="reader-container" id="readerContainer" style="display: none;">
         <speed-reader id="reader"></speed-reader>
       </div>
@@ -306,6 +346,33 @@
       readerContainer.style.display = 'block';
     };
 
+    // Load Tumblr URL from input field
+    window.loadTumblrUrl = async function() {
+      const input = document.getElementById('tumblrInput');
+      const url = input.value.trim();
+
+      if (!url) {
+        status.textContent = 'Please enter a Tumblr URL';
+        status.style.background = '#fff0f0';
+        status.style.color = '#cc0000';
+        return;
+      }
+
+      if (!url.includes('tumblr.com')) {
+        status.textContent = 'Please enter a valid Tumblr URL';
+        status.style.background = '#fff0f0';
+        status.style.color = '#cc0000';
+        return;
+      }
+
+      status.textContent = `Loading Tumblr post...`;
+      status.style.background = '#f0f0f0';
+      status.style.color = '#666';
+
+      reader.setAttribute('tumblr', url);
+      readerContainer.style.display = 'block';
+    };
+
     // Make loadSample available globally
     window.loadSample = async function(type) {
       const sample = samples[type];
@@ -332,6 +399,13 @@
         document.querySelectorAll('.sample-buttons button').forEach(b => b.disabled = false);
       }
     };
+
+    // Enter key on URL input
+    document.getElementById('tumblrInput').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        window.loadTumblrUrl();
+      }
+    });
 
     // Click to select file
     dropzone.addEventListener('click', () => fileInput.click());
