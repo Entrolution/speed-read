@@ -141,6 +141,60 @@ And this (https://blog.tumblr.com/post/456/another)!
     // Should NOT contain google.com redirect
     expect(urls[0]).not.toContain('google.com');
   });
+
+  it('should extract both linked and bare plain-text URLs from HTML', () => {
+    const html = `
+      <html><body>
+        <p><a href="https://www.tumblr.com/user1/111/linked-post">Linked</a></p>
+        <p>https://www.tumblr.com/user2/222/bare-post</p>
+      </body></html>
+    `;
+    const urls = extractTumblrUrls(html);
+    expect(urls).toHaveLength(2);
+    expect(urls[0]).toBe('https://www.tumblr.com/user1/111/linked-post');
+    expect(urls[1]).toBe('https://www.tumblr.com/user2/222/bare-post');
+  });
+
+  it('should extract plain-text URLs from HTML even when no hrefs link to tumblr', () => {
+    const html = `
+      <html><body>
+        <a href="https://example.com">Not tumblr</a>
+        <p>https://www.tumblr.com/blogger/333/plain-text-only</p>
+      </body></html>
+    `;
+    const urls = extractTumblrUrls(html);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toBe('https://www.tumblr.com/blogger/333/plain-text-only');
+  });
+
+  it('should extract URLs split across span tags', () => {
+    const html = `
+      <html><body>
+        <p><span>https://www.</span><span>tumblr.com/user/444/split-span-post</span></p>
+      </body></html>
+    `;
+    const urls = extractTumblrUrls(html);
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toBe('https://www.tumblr.com/user/444/split-span-post');
+  });
+
+  it('should preserve document order when linked and bare URLs are interleaved', () => {
+    const html = `
+      <html><body>
+        <p><a href="https://www.tumblr.com/user1/111/first">First</a></p>
+        <p>https://www.tumblr.com/user2/222/second</p>
+        <p><a href="https://www.tumblr.com/user3/333/third">Third</a></p>
+        <p>https://www.tumblr.com/user4/444/fourth</p>
+      </body></html>
+    `;
+    const urls = extractTumblrUrls(html);
+    expect(urls).toEqual([
+      'https://www.tumblr.com/user1/111/first',
+      'https://www.tumblr.com/user2/222/second',
+      'https://www.tumblr.com/user3/333/third',
+      'https://www.tumblr.com/user4/444/fourth',
+    ]);
+  });
 });
 
 describe('extractLabelFromUrl', () => {
