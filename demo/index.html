@@ -235,7 +235,7 @@
 <body>
   <div class="container">
     <h1>Speed-Read</h1>
-    <p class="tagline">Lightweight, embeddable document reader for EPUB, PDF, CBZ, and Tumblr posts</p>
+    <p class="tagline">Lightweight, embeddable document reader for EPUB, PDF, CBZ, Tumblr posts, and Tumblr playlists</p>
 
     <div class="demo-section">
       <h2>Try it out</h2>
@@ -245,6 +245,7 @@
         <button onclick="loadSample('pdf')" id="btn-pdf">Load Sample PDF</button>
         <button onclick="loadSample('cbz')" id="btn-cbz">Load Sample CBZ</button>
         <button onclick="loadTumblr()" id="btn-tumblr" style="background: #35465c; border-color: #35465c;">Load Tumblr Post</button>
+        <button onclick="loadTumblrPlaylist()" id="btn-playlist" style="background: #35465c; border-color: #35465c;">Load Tumblr Playlist</button>
       </div>
 
       <div class="divider"><span>or</span></div>
@@ -255,11 +256,11 @@
         <p class="formats">Supports: EPUB, PDF, CBZ</p>
       </div>
 
-      <div class="divider"><span>or enter a Tumblr URL</span></div>
+      <div class="divider"><span>or enter a Tumblr URL or Google Docs playlist</span></div>
 
       <div class="url-input-area">
-        <input type="url" id="tumblrInput" placeholder="https://www.tumblr.com/username/post-id/slug">
-        <button onclick="loadTumblrUrl()" id="btn-load-url">Load</button>
+        <input type="url" id="urlInput" placeholder="Tumblr post URL or Google Docs playlist URL">
+        <button onclick="loadUrl()" id="btn-load-url">Load</button>
       </div>
 
       <div class="reader-container" id="readerContainer" style="display: none;">
@@ -281,7 +282,7 @@
       <div class="features">
         <div class="feature">
           <h3>Multi-Format</h3>
-          <p>EPUB, PDF, CBZ, and Tumblr post support</p>
+          <p>EPUB, PDF, CBZ, Tumblr posts, and Tumblr playlists</p>
         </div>
         <div class="feature">
           <h3>Lightweight</h3>
@@ -335,41 +336,69 @@
     // Tumblr test URL
     const tumblrUrl = 'https://www.tumblr.com/revelboo/762688045814317056/everything-is-alright-pt1';
 
+    // Tumblr playlist test URL (Google Doc)
+    const playlistUrl = 'https://docs.google.com/document/d/15FrbEgGaTBRPtvJtNNeyRKXW-Zcs-TVvtTIQ7koznZg/edit?usp=sharing';
+
     // Make loadTumblr available globally
     window.loadTumblr = async function() {
       status.textContent = `Loading Tumblr post...`;
       status.style.background = '#f0f0f0';
       status.style.color = '#666';
 
-      // Set the tumblr attribute on the reader
+      // Clear any previous attributes and set the tumblr attribute
+      reader.removeAttribute('tumblr-playlist');
       reader.setAttribute('tumblr', tumblrUrl);
       readerContainer.style.display = 'block';
     };
 
-    // Load Tumblr URL from input field
-    window.loadTumblrUrl = async function() {
-      const input = document.getElementById('tumblrInput');
-      const url = input.value.trim();
-
-      if (!url) {
-        status.textContent = 'Please enter a Tumblr URL';
-        status.style.background = '#fff0f0';
-        status.style.color = '#cc0000';
-        return;
-      }
-
-      if (!url.includes('tumblr.com')) {
-        status.textContent = 'Please enter a valid Tumblr URL';
-        status.style.background = '#fff0f0';
-        status.style.color = '#cc0000';
-        return;
-      }
-
-      status.textContent = `Loading Tumblr post...`;
+    // Load Tumblr playlist from Google Docs
+    window.loadTumblrPlaylist = async function() {
+      status.textContent = `Loading Tumblr playlist...`;
       status.style.background = '#f0f0f0';
       status.style.color = '#666';
 
-      reader.setAttribute('tumblr', url);
+      // Clear any previous attributes and set the tumblr-playlist attribute
+      reader.removeAttribute('tumblr');
+      reader.setAttribute('tumblr-playlist', playlistUrl);
+      readerContainer.style.display = 'block';
+    };
+
+    // Load URL from input field - auto-detects Tumblr vs Google Docs
+    window.loadUrl = async function() {
+      const input = document.getElementById('urlInput');
+      const url = input.value.trim();
+
+      if (!url) {
+        status.textContent = 'Please enter a URL';
+        status.style.background = '#fff0f0';
+        status.style.color = '#cc0000';
+        return;
+      }
+
+      // Detect URL type
+      const isGoogleDocs = url.includes('docs.google.com/document');
+      const isTumblr = url.includes('tumblr.com');
+
+      if (!isGoogleDocs && !isTumblr) {
+        status.textContent = 'Please enter a valid Tumblr URL or Google Docs URL';
+        status.style.background = '#fff0f0';
+        status.style.color = '#cc0000';
+        return;
+      }
+
+      status.style.background = '#f0f0f0';
+      status.style.color = '#666';
+
+      if (isGoogleDocs) {
+        status.textContent = `Loading Tumblr playlist from Google Docs...`;
+        reader.removeAttribute('tumblr');
+        reader.setAttribute('tumblr-playlist', url);
+      } else {
+        status.textContent = `Loading Tumblr post...`;
+        reader.removeAttribute('tumblr-playlist');
+        reader.setAttribute('tumblr', url);
+      }
+
       readerContainer.style.display = 'block';
     };
 
@@ -401,9 +430,9 @@
     };
 
     // Enter key on URL input
-    document.getElementById('tumblrInput').addEventListener('keypress', (e) => {
+    document.getElementById('urlInput').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
-        window.loadTumblrUrl();
+        window.loadUrl();
       }
     });
 

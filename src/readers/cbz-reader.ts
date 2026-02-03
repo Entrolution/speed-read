@@ -6,6 +6,7 @@ import type {
   ExtractResponse,
 } from '../workers/zip-extractor.worker';
 import type { TocItem, FitMode, LayoutMode } from '@/types';
+import { clampZoom } from '@/core/utils';
 
 /**
  * CBZ (Comic Book ZIP) reader with lazy loading and Web Worker extraction
@@ -24,11 +25,15 @@ export class CbzReader extends BaseReader {
   private onPageChangeCallback?: (page: number, total: number) => void;
 
   // LRU cache for extracted images (uses lastAccess timestamp for O(1) updates)
-  private readonly maxCacheSize = 5;
+  // Size of 10 balances memory usage vs. avoiding re-extractions during navigation
+  private readonly maxCacheSize = 10;
   private imageCache: Map<number, { blob: Blob; url: string; lastAccess: number }> = new Map();
 
   // Track pending extractions to avoid duplicates
   private pendingExtractions: Map<number, Promise<Blob>> = new Map();
+
+  // Track navigation direction for adaptive preloading
+  private lastPageNum = 1;
 
   // Zoom and layout state
   private zoomLevel = 1.0;
@@ -202,9 +207,19 @@ export class CbzReader extends BaseReader {
 
   /**
    * Preload adjacent pages in background
+   * Adapts preload strategy based on navigation direction
    */
   private preloadAdjacent(currentPage: number): void {
-    const pagesToPreload = [currentPage + 1, currentPage - 1, currentPage + 2];
+    // Determine navigation direction
+    const goingForward = currentPage >= this.lastPageNum;
+    this.lastPageNum = currentPage;
+
+    // Prioritize preloading in the direction of travel
+    // Forward: +1, +2, +3, -1
+    // Backward: -1, -2, -3, +1
+    const pagesToPreload = goingForward
+      ? [currentPage + 1, currentPage + 2, currentPage + 3, currentPage - 1]
+      : [currentPage - 1, currentPage - 2, currentPage - 3, currentPage + 1];
 
     for (const page of pagesToPreload) {
       const index = page - 1;
@@ -394,7 +409,7 @@ export class CbzReader extends BaseReader {
    * Set zoom level
    */
   setZoom(level: number): void {
-    this.zoomLevel = Math.max(0.5, Math.min(3.0, level));
+    this.zoomLevel = clampZoom(level);
     this.fitMode = 'none';
     // Re-render current page
     this.renderPage(this.currentPageNum);

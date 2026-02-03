@@ -150,6 +150,10 @@ type ReaderErrorType =
   | 'DRM_PROTECTED'
   | 'LOAD_FAILED'
   | 'CORS_ERROR'
+  | 'NETWORK_ERROR'
+  | 'TIMEOUT'
+  | 'MALFORMED_FILE'
+  | 'RENDER_ERROR'
   | 'UNKNOWN';
 
 type DocumentFormat = 'epub' | 'pdf' | 'cbz';

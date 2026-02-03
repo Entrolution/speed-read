@@ -1,6 +1,7 @@
 import { BaseReader } from './base-reader';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 import type { TocItem, FitMode, LayoutMode } from '@/types';
+import { clampZoom } from '@/core/utils';
 
 interface PdfOutlineItem {
   title: string;
@@ -109,8 +110,22 @@ export class PdfReader extends BaseReader {
       pageNum = pageNum - 1;
     }
 
-    // Get the page
-    const page = await this.pdfDoc.getPage(pageNum);
+    // Determine if we need to render two pages
+    const is2PageMode = this.layoutMode === '2-page' && this.canvas2 && this.ctx2;
+    const nextPageNum = pageNum + 1;
+    const hasSecondPage = is2PageMode && nextPageNum <= this.pdfDoc.numPages;
+
+    // Fetch pages in parallel for 2-page mode
+    const pagePromises: Promise<Awaited<ReturnType<PDFDocumentProxy['getPage']>>>[] = [
+      this.pdfDoc.getPage(pageNum),
+    ];
+    if (hasSecondPage) {
+      pagePromises.push(this.pdfDoc.getPage(nextPageNum));
+    }
+
+    const pages = await Promise.all(pagePromises);
+    const page = pages[0];
+    const page2 = pages[1];
 
     // Check if component was destroyed during async operation
     if (!this.canvas || !this.ctx) return;
@@ -118,66 +133,67 @@ export class PdfReader extends BaseReader {
     // Calculate scale based on fit mode and zoom level
     this.scale = this.calculateScale(page);
 
-    const viewport = page.getViewport({ scale: this.scale });
+    // HiDPI support: render at device pixel ratio for sharp display
+    const dpr = window.devicePixelRatio || 1;
+    const viewport = page.getViewport({ scale: this.scale * dpr });
 
-    // Set canvas dimensions
+    // Set canvas backing store dimensions (actual pixels)
     this.canvas.width = viewport.width;
     this.canvas.height = viewport.height;
+    // Set CSS dimensions (logical pixels)
+    this.canvas.style.width = `${viewport.width / dpr}px`;
+    this.canvas.style.height = `${viewport.height / dpr}px`;
     this.canvas.style.display = 'block';
 
-    // Render the first page
+    // Prepare render tasks
     this.currentRenderTask = page.render({
       canvasContext: this.ctx,
       viewport: viewport,
     });
 
-    try {
-      await this.currentRenderTask.promise;
-    } catch (err) {
-      if ((err as Error).name !== 'RenderingCancelledException') {
-        throw err;
-      }
-    }
-    this.currentRenderTask = null;
+    // Set up second page render task if applicable
+    if (hasSecondPage && page2 && this.canvas2 && this.ctx2) {
+      const viewport2 = page2.getViewport({ scale: this.scale * dpr });
+      this.canvas2.width = viewport2.width;
+      this.canvas2.height = viewport2.height;
+      this.canvas2.style.width = `${viewport2.width / dpr}px`;
+      this.canvas2.style.height = `${viewport2.height / dpr}px`;
+      this.canvas2.style.display = 'block';
 
-    // Check if component was destroyed during render
-    if (!this.canvas2 || !this.ctx2 || !this.pdfDoc) return;
-
-    // Render second page for 2-page layout
-    if (this.layoutMode === '2-page' && this.canvas2 && this.ctx2) {
-      const nextPageNum = pageNum + 1;
-      if (nextPageNum <= this.pdfDoc.numPages) {
-        const page2 = await this.pdfDoc.getPage(nextPageNum);
-
-        // Check if component was destroyed during async operation
-        if (!this.canvas2 || !this.ctx2) return;
-
-        const viewport2 = page2.getViewport({ scale: this.scale });
-
-        this.canvas2.width = viewport2.width;
-        this.canvas2.height = viewport2.height;
-        this.canvas2.style.display = 'block';
-
-        this.currentRenderTask2 = page2.render({
-          canvasContext: this.ctx2,
-          viewport: viewport2,
-        });
-
-        try {
-          await this.currentRenderTask2.promise;
-        } catch (err) {
-          if ((err as Error).name !== 'RenderingCancelledException') {
-            throw err;
-          }
-        }
-        this.currentRenderTask2 = null;
-      } else {
-        // Hide second canvas if no second page
-        this.canvas2.style.display = 'none';
-      }
+      this.currentRenderTask2 = page2.render({
+        canvasContext: this.ctx2,
+        viewport: viewport2,
+      });
     } else if (this.canvas2) {
       this.canvas2.style.display = 'none';
     }
+
+    // Execute renders in parallel
+    const renderPromises: Promise<void>[] = [
+      this.currentRenderTask.promise.then(() => {
+        this.currentRenderTask = null;
+      }).catch((err) => {
+        this.currentRenderTask = null;
+        if ((err as Error).name !== 'RenderingCancelledException') {
+          throw err;
+        }
+      }),
+    ];
+
+    if (this.currentRenderTask2) {
+      renderPromises.push(
+        this.currentRenderTask2.promise.then(() => {
+          this.currentRenderTask2 = null;
+        }).catch((err) => {
+          this.currentRenderTask2 = null;
+          if ((err as Error).name !== 'RenderingCancelledException') {
+            throw err;
+          }
+        })
+      );
+    }
+
+    await Promise.all(renderPromises);
 
     // Fire callback
     if (this.onPageChangeCallback) {
@@ -329,7 +345,7 @@ export class PdfReader extends BaseReader {
    * Set zoom level
    */
   setZoom(level: number): void {
-    this.zoomLevel = Math.max(0.5, Math.min(3.0, level));
+    this.zoomLevel = clampZoom(level);
     this.fitMode = 'none';
     // Re-render current page with new zoom
     const currentPage = this.pageController.currentPage;

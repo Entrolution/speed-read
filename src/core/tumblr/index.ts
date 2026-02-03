@@ -12,3 +12,10 @@ export {
 export { parseTumblrData, parseTumblrPage } from './tumblr-parser';
 export { TumblrCache } from './tumblr-cache';
 export { generateEpub, type ExportProgress, type ProgressCallback } from './tumblr-epub';
+export {
+  getGoogleDocExportUrl,
+  extractTumblrUrls,
+  extractLabelFromUrl,
+  extractBlogNameFromUrl,
+} from './playlist-parser';
+export { renderBlock, renderReblogEntry } from './tumblr-render';

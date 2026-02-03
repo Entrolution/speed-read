@@ -7,17 +7,24 @@ import type {
   FormatReader,
   ReaderNavigation,
   TumblrPost,
-  TumblrContentBlock,
-  ReblogEntry,
 } from '@/types';
 import {
   fetchTumblrData,
   parseTumblrData,
   TumblrCache,
   generateEpub,
+  renderBlock,
+  renderReblogEntry,
   type FetchResult,
   type ProgressCallback,
 } from '@/core/tumblr';
+import {
+  escapeHtml,
+  createLoadingHtml,
+  createErrorHtml,
+  setupRetryListener,
+  setupKeyboardNavigation,
+} from '@/core/utils';
 
 export interface TumblrReaderOptions {
   /** Custom CORS proxy URL (appends encoded target URL) */
@@ -39,7 +46,7 @@ export class TumblrReader implements FormatReader {
   private customProxy?: string;
   private onPageChangeCallback?: (page: number, total: number) => void;
   private isLoading = false;
-  private boundKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private cleanupKeyboardNav: (() => void) | null = null;
 
   /**
    * Load a Tumblr post from URL
@@ -120,13 +127,7 @@ export class TumblrReader implements FormatReader {
    */
   private showLoading(): void {
     if (!this.container) return;
-
-    this.container.innerHTML = `
-      <div class="tumblr-loading">
-        <div class="tumblr-spinner"></div>
-        <p>Loading post...</p>
-      </div>
-    `;
+    this.container.innerHTML = createLoadingHtml('Loading post...');
   }
 
   /**
@@ -134,20 +135,8 @@ export class TumblrReader implements FormatReader {
    */
   private showError(message: string): void {
     if (!this.container) return;
-
-    this.container.innerHTML = `
-      <div class="tumblr-error">
-        <div class="tumblr-error-icon">!</div>
-        <h2>Could not load post</h2>
-        <p>${this.escapeHtml(message)}</p>
-        <button class="tumblr-retry-btn" onclick="this.closest('.tumblr-error').dispatchEvent(new CustomEvent('retry', { bubbles: true }))">
-          Try Again
-        </button>
-      </div>
-    `;
-
-    // Listen for retry
-    this.container.querySelector('.tumblr-error')?.addEventListener('retry', () => {
+    this.container.innerHTML = createErrorHtml(message);
+    setupRetryListener(this.container, () => {
       const currentUrl = this.postHistory[this.historyIndex];
       if (currentUrl) {
         this.loadPost(currentUrl);
@@ -165,20 +154,20 @@ export class TumblrReader implements FormatReader {
 
     // Build reblog trail HTML
     const trailHtml = post.reblogTrail.length > 0
-      ? `<div class="tumblr-reblog-trail">${post.reblogTrail.map(entry => this.renderReblogEntry(entry)).join('')}</div>`
+      ? `<div class="tumblr-reblog-trail">${post.reblogTrail.map(entry => renderReblogEntry(entry)).join('')}</div>`
       : '';
 
     // Build main content HTML
-    const contentHtml = post.content.map(block => this.renderBlock(block)).join('');
+    const contentHtml = post.content.map(block => renderBlock(block)).join('');
 
     // Title
     const titleHtml = post.title
-      ? `<h1 class="tumblr-title">${this.escapeHtml(post.title)}</h1>`
+      ? `<h1 class="tumblr-title">${escapeHtml(post.title)}</h1>`
       : '';
 
     // Tags
     const tagsHtml = post.tags.length > 0
-      ? `<div class="tumblr-tags">${post.tags.map(t => `<span class="tumblr-tag">#${this.escapeHtml(t)}</span>`).join(' ')}</div>`
+      ? `<div class="tumblr-tags">${post.tags.map(t => `<span class="tumblr-tag">#${escapeHtml(t)}</span>`).join(' ')}</div>`
       : '';
 
     this.container.innerHTML = `
@@ -187,8 +176,8 @@ export class TumblrReader implements FormatReader {
         ${trailHtml}
         <div class="tumblr-content">
           <div class="tumblr-author">
-            <a href="${this.escapeHtml(post.blogUrl)}" target="_blank" rel="noopener">
-              <strong>${this.escapeHtml(post.blogName)}</strong>
+            <a href="${escapeHtml(post.blogUrl)}" target="_blank" rel="noopener">
+              <strong>${escapeHtml(post.blogName)}</strong>
             </a>
           </div>
           ${contentHtml}
@@ -202,78 +191,18 @@ export class TumblrReader implements FormatReader {
   }
 
   /**
-   * Render a reblog entry
-   */
-  private renderReblogEntry(entry: ReblogEntry): string {
-    const content = entry.content.map(b => this.renderBlock(b)).join('');
-    return `
-      <div class="tumblr-reblog-entry">
-        <div class="tumblr-reblog-author">
-          <a href="${this.escapeHtml(entry.blogUrl)}" target="_blank" rel="noopener">
-            ${this.escapeHtml(entry.blogName)}
-          </a>
-        </div>
-        <div class="tumblr-reblog-content">${content}</div>
-      </div>
-    `;
-  }
-
-  /**
-   * Render a content block
-   */
-  private renderBlock(block: TumblrContentBlock): string {
-    switch (block.type) {
-      case 'heading1':
-        return `<h1>${this.escapeHtml(block.text || '')}</h1>`;
-      case 'heading2':
-        return `<h2>${this.escapeHtml(block.text || '')}</h2>`;
-      case 'image':
-        return block.url
-          ? `<img src="${this.escapeHtml(block.url)}" alt="" class="tumblr-image" loading="lazy" />`
-          : '';
-      case 'link':
-        return block.url
-          ? `<p><a href="${this.escapeHtml(block.url)}" target="_blank" rel="noopener">${this.escapeHtml(block.text || block.url)}</a></p>`
-          : `<p>${this.escapeHtml(block.text || '')}</p>`;
-      case 'video':
-        return `<div class="tumblr-video">[Video: ${this.escapeHtml(block.url || 'embedded')}]</div>`;
-      case 'audio':
-        return `<div class="tumblr-audio">[Audio: ${this.escapeHtml(block.url || 'embedded')}]</div>`;
-      case 'text':
-      default:
-        // Text may contain safe HTML from formatting
-        return `<p>${this.sanitizeHtml(block.text || '')}</p>`;
-    }
-  }
-
-  /**
    * Set up keyboard navigation
    */
   private setupKeyboardNavigation(): void {
-    this.boundKeyHandler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      switch (e.key) {
-        case 'ArrowRight':
-        case 'ArrowDown':
-          if (!this.isLoading && this.canGoNext()) {
-            e.preventDefault();
-            this.next();
-          }
-          break;
-        case 'ArrowLeft':
-        case 'ArrowUp':
-          if (!this.isLoading && this.canGoPrev()) {
-            e.preventDefault();
-            this.prev();
-          }
-          break;
-      }
-    };
-
-    document.addEventListener('keydown', this.boundKeyHandler);
+    this.cleanupKeyboardNav = setupKeyboardNavigation({
+      onNext: () => {
+        if (this.canGoNext()) this.next();
+      },
+      onPrev: () => {
+        if (this.canGoPrev()) this.prev();
+      },
+      canNavigate: () => !this.isLoading,
+    });
   }
 
   /**
@@ -429,9 +358,9 @@ export class TumblrReader implements FormatReader {
    * Clean up resources
    */
   destroy(): void {
-    if (this.boundKeyHandler) {
-      document.removeEventListener('keydown', this.boundKeyHandler);
-      this.boundKeyHandler = null;
+    if (this.cleanupKeyboardNav) {
+      this.cleanupKeyboardNav();
+      this.cleanupKeyboardNav = null;
     }
 
     this.container = null;
@@ -439,71 +368,5 @@ export class TumblrReader implements FormatReader {
     this.postHistory = [];
     this.historyIndex = -1;
     this.onPageChangeCallback = undefined;
-  }
-
-  /**
-   * Escape HTML special characters
-   */
-  // Escape map for single-pass HTML escaping (more efficient than chained replaces)
-  private static readonly HTML_ESCAPE_MAP: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  };
-
-  private escapeHtml(text: string): string {
-    return text.replace(/[&<>"']/g, char => TumblrReader.HTML_ESCAPE_MAP[char]);
-  }
-
-  /**
-   * Sanitize HTML, keeping only safe tags
-   */
-  private sanitizeHtml(html: string): string {
-    // Simple sanitization - allow basic formatting tags
-    const allowedTags = ['strong', 'em', 'b', 'i', 's', 'u', 'br'];
-
-    // Create a temporary div to parse HTML
-    const temp = document.createElement('div');
-    temp.innerHTML = html;
-
-    // Walk through and clean up
-    const clean = (node: Node): string => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        return this.escapeHtml(node.textContent || '');
-      }
-
-      if (node.nodeType !== Node.ELEMENT_NODE) {
-        return '';
-      }
-
-      const element = node as Element;
-      const tagName = element.tagName.toLowerCase();
-
-      // Handle allowed tags
-      if (allowedTags.includes(tagName)) {
-        const children = Array.from(element.childNodes).map(clean).join('');
-        if (tagName === 'br') {
-          return '<br/>';
-        }
-        return `<${tagName}>${children}</${tagName}>`;
-      }
-
-      // Handle links specially
-      if (tagName === 'a') {
-        const href = element.getAttribute('href');
-        const children = Array.from(element.childNodes).map(clean).join('');
-        if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
-          return `<a href="${this.escapeHtml(href)}" target="_blank" rel="noopener">${children}</a>`;
-        }
-        return children;
-      }
-
-      // For other tags, just include their text content
-      return Array.from(element.childNodes).map(clean).join('');
-    };
-
-    return Array.from(temp.childNodes).map(clean).join('');
   }
 }
