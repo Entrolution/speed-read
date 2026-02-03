@@ -444,13 +444,17 @@ export class TumblrReader implements FormatReader {
   /**
    * Escape HTML special characters
    */
+  // Escape map for single-pass HTML escaping (more efficient than chained replaces)
+  private static readonly HTML_ESCAPE_MAP: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+
   private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+    return text.replace(/[&<>"']/g, char => TumblrReader.HTML_ESCAPE_MAP[char]);
   }
 
   /**

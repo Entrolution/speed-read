@@ -501,13 +501,17 @@ function blockToXhtml(block: TumblrContentBlock, imageMap: Map<string, ImageInfo
 /**
  * Escape special XML characters
  */
+// Escape map for single-pass XML escaping
+const XML_ESCAPE_MAP: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
 function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  return text.replace(/[&<>"']/g, char => XML_ESCAPE_MAP[char]);
 }
 
 /**

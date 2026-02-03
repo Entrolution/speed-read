@@ -30,6 +30,8 @@ export class PdfReader extends BaseReader {
   private pagesContainer: HTMLDivElement | null = null;
 
   // Cache for page viewport dimensions (avoids repeated getViewport calls)
+  // Limited to 50 entries to prevent unbounded memory growth with large PDFs
+  private static readonly MAX_VIEWPORT_CACHE_SIZE = 50;
   private viewportCache: Map<number, { width: number; height: number }> = new Map();
 
   async load(data: ArrayBuffer, container: HTMLElement): Promise<void> {
@@ -186,6 +188,11 @@ export class PdfReader extends BaseReader {
     if (!dimensions) {
       const defaultViewport = page.getViewport({ scale: 1 });
       dimensions = { width: defaultViewport.width, height: defaultViewport.height };
+      // Evict oldest entry if cache is full
+      if (this.viewportCache.size >= PdfReader.MAX_VIEWPORT_CACHE_SIZE) {
+        const firstKey = this.viewportCache.keys().next().value;
+        if (firstKey !== undefined) this.viewportCache.delete(firstKey);
+      }
       this.viewportCache.set(pageNum, dimensions);
     }
 
