@@ -500,11 +500,6 @@ export class SpeedReader extends LitElement {
   @property({ type: String, attribute: 'tumblr-proxy' })
   tumblrProxy?: string;
 
-  /**
-   * Title for EPUB export (also used as filename)
-   */
-  @property({ type: String, attribute: 'export-title' })
-  exportTitle?: string;
 
   @state()
   private currentPage = 0;
@@ -944,21 +939,44 @@ export class SpeedReader extends LitElement {
     this.exportProgress = 'Starting...';
 
     try {
-      // Use exportTitle if set, otherwise fall back to blog name
-      const title = this.exportTitle || this.tumblrReader.getBlogName() || 'Tumblr Export';
+      const title = this.tumblrReader.getBlogName() || 'Tumblr Export';
       const blob = await this.tumblrReader.exportAsEpub((progress) => {
         this.exportProgress = progress.message;
       }, title);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
       // Sanitize filename: remove/replace invalid characters
       const safeFilename = title.replace(/[<>:"/\\|?*]/g, '-').trim() || 'tumblr-export';
-      a.download = `${safeFilename}.epub`;
+      const filename = `${safeFilename}.epub`;
+
+      // Try File System Access API first (gives user control over filename)
+      if ('showSaveFilePicker' in window) {
+        try {
+          const handle = await (window as Window & { showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle> }).showSaveFilePicker({
+            suggestedName: filename,
+            types: [{
+              description: 'EPUB files',
+              accept: { 'application/epub+zip': ['.epub'] },
+            }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          return;
+        } catch (err) {
+          // User cancelled or API not supported, fall through to download link
+          if ((err as Error).name === 'AbortError') return;
+        }
+      }
+
+      // Fallback: anchor download
+      const file = new File([blob], filename, { type: 'application/epub+zip' });
+      const url = URL.createObjectURL(file);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
       console.error('Export failed:', err);
     } finally {
