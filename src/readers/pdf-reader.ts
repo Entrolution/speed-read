@@ -112,6 +112,9 @@ export class PdfReader extends BaseReader {
     // Get the page
     const page = await this.pdfDoc.getPage(pageNum);
 
+    // Check if component was destroyed during async operation
+    if (!this.canvas || !this.ctx) return;
+
     // Calculate scale based on fit mode and zoom level
     this.scale = this.calculateScale(page);
 
@@ -137,11 +140,18 @@ export class PdfReader extends BaseReader {
     }
     this.currentRenderTask = null;
 
+    // Check if component was destroyed during render
+    if (!this.canvas2 || !this.ctx2 || !this.pdfDoc) return;
+
     // Render second page for 2-page layout
     if (this.layoutMode === '2-page' && this.canvas2 && this.ctx2) {
       const nextPageNum = pageNum + 1;
       if (nextPageNum <= this.pdfDoc.numPages) {
         const page2 = await this.pdfDoc.getPage(nextPageNum);
+
+        // Check if component was destroyed during async operation
+        if (!this.canvas2 || !this.ctx2) return;
+
         const viewport2 = page2.getViewport({ scale: this.scale });
 
         this.canvas2.width = viewport2.width;

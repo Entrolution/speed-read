@@ -1,4 +1,4 @@
-import { LitElement, html, css } from 'lit';
+import { LitElement, html, css, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { TocItem } from '@/types';
 
@@ -195,6 +195,8 @@ export class TocPanel extends LitElement {
   @state()
   private focusedIndex = -1;
 
+  private previouslyFocusedElement: HTMLElement | null = null;
+
   override connectedCallback(): void {
     super.connectedCallback();
     document.addEventListener('keydown', this.handleKeydown);
@@ -205,24 +207,62 @@ export class TocPanel extends LitElement {
     document.removeEventListener('keydown', this.handleKeydown);
   }
 
+  override updated(changedProps: PropertyValues): void {
+    if (changedProps.has('open')) {
+      if (this.open) {
+        // Store the previously focused element before opening
+        this.previouslyFocusedElement = document.activeElement as HTMLElement;
+      }
+      // Note: focus is moved out BEFORE close via moveFocusOutAndClose()
+    }
+  }
+
+  /**
+   * Move focus out of the panel and then dispatch close event
+   * This prevents aria-hidden focus warnings by moving focus before inert is applied
+   */
+  private moveFocusOutAndClose(): void {
+    // Move focus out first
+    const panel = this.renderRoot.querySelector('.panel');
+    if (panel?.contains(document.activeElement)) {
+      if (this.previouslyFocusedElement && document.body.contains(this.previouslyFocusedElement)) {
+        this.previouslyFocusedElement.focus();
+      } else {
+        (document.activeElement as HTMLElement)?.blur();
+      }
+    }
+    this.previouslyFocusedElement = null;
+
+    // Then dispatch close event
+    this.dispatchEvent(new CustomEvent('close'));
+  }
+
   private handleKeydown = (e: KeyboardEvent): void => {
     if (!this.open) return;
 
     if (e.key === 'Escape') {
       e.preventDefault();
-      this.handleClose();
+      this.moveFocusOutAndClose();
     }
   };
 
   private handleBackdropClick = (): void => {
-    this.handleClose();
+    this.moveFocusOutAndClose();
   };
 
   private handleClose(): void {
-    this.dispatchEvent(new CustomEvent('close'));
+    this.moveFocusOutAndClose();
   }
 
   private handleItemClick(item: TocItem): void {
+    // Move focus out before the panel closes to avoid aria-hidden warning
+    if (this.previouslyFocusedElement && document.body.contains(this.previouslyFocusedElement)) {
+      this.previouslyFocusedElement.focus();
+    } else {
+      (document.activeElement as HTMLElement)?.blur();
+    }
+    this.previouslyFocusedElement = null;
+
     this.dispatchEvent(new CustomEvent('toc-select', { detail: item }));
   }
 
@@ -275,7 +315,7 @@ export class TocPanel extends LitElement {
         class="panel"
         role="navigation"
         aria-label="Table of contents"
-        aria-hidden=${!this.open}
+        ?inert=${!this.open}
       >
         <header class="panel-header">
           <h2 class="panel-title">Contents</h2>

@@ -243,10 +243,15 @@ export class CbzReader extends BaseReader {
 
     // Extract and display first image
     await this.extractImage(index);
+
+    // Check if component was destroyed during extraction
+    if (!this.currentImage) return;
+
     const cached = this.imageCache.get(index);
 
     if (!cached) {
-      throw new Error('Image not in cache after extraction');
+      // Component may have been destroyed and cache cleared - silently return
+      return;
     }
 
     // Apply zoom styling
@@ -264,6 +269,10 @@ export class CbzReader extends BaseReader {
       const nextIndex = index + 1;
       if (nextIndex < this.entries.length) {
         await this.extractImage(nextIndex);
+
+        // Check if component was destroyed during extraction
+        if (!this.secondImage) return;
+
         const cached2 = this.imageCache.get(nextIndex);
 
         if (cached2) {

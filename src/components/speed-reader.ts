@@ -639,7 +639,9 @@ export class SpeedReader extends LitElement {
         (this.manifest && manifestChanged);
 
       if (shouldReinit) {
-        this.initReader();
+        // Defer initReader to avoid scheduling update during update
+        // Using queueMicrotask ensures it runs after the current update completes
+        queueMicrotask(() => this.initReader());
       }
     }
   }
@@ -664,8 +666,12 @@ export class SpeedReader extends LitElement {
    * Uses guards to avoid unnecessary re-renders for unchanged values
    */
   private resetReaderState(): void {
-    this.isLoading = true;
-    this.error = null;
+    if (!this.isLoading) {
+      this.isLoading = true;
+    }
+    if (this.error !== null) {
+      this.error = null;
+    }
     if (this.tocItems.length > 0) {
       this.tocItems = [];
     }
@@ -706,26 +712,44 @@ export class SpeedReader extends LitElement {
       src,
       manifest,
       onError: (error) => {
-        this.error = error;
-        this.isLoading = false;
+        if (this.error !== error) {
+          this.error = error;
+        }
+        if (this.isLoading) {
+          this.isLoading = false;
+        }
         this.dispatchEvent(new CustomEvent('error', { detail: error }));
       },
       onPageChange: (page, total) => {
-        this.currentPage = page;
-        this.totalPages = total;
+        if (this.currentPage !== page) {
+          this.currentPage = page;
+        }
+        if (this.totalPages !== total) {
+          this.totalPages = total;
+        }
         this.dispatchEvent(new CustomEvent('pagechange', { detail: { page, total } }));
       },
       onChapterChange: (chapter, total) => {
-        this.currentChapter = chapter;
-        this.totalChapters = total;
+        if (this.currentChapter !== chapter) {
+          this.currentChapter = chapter;
+        }
+        if (this.totalChapters !== total) {
+          this.totalChapters = total;
+        }
         this.dispatchEvent(new CustomEvent('chapterchange', { detail: { chapter, total } }));
       },
       onReady: () => {
-        this.isLoading = false;
+        if (this.isLoading) {
+          this.isLoading = false;
+        }
         const nav = this.engine?.getNavigation();
         if (nav) {
-          this.currentPage = nav.currentPage;
-          this.totalPages = nav.totalPages;
+          if (this.currentPage !== nav.currentPage) {
+            this.currentPage = nav.currentPage;
+          }
+          if (this.totalPages !== nav.totalPages) {
+            this.totalPages = nav.totalPages;
+          }
         }
 
         this.loadToc();
@@ -755,15 +779,21 @@ export class SpeedReader extends LitElement {
       await this.tumblrReader.loadFromUrl(url, this.contentRef, {
         customProxy: this.tumblrProxy,
         onPageChange: (page, total) => {
-          this.currentPage = page;
-          this.totalPages = total;
+          if (this.currentPage !== page) {
+            this.currentPage = page;
+          }
+          if (this.totalPages !== total) {
+            this.totalPages = total;
+          }
           this.updateTumblrNavigation();
           this.updateCachedPostCount();
           this.dispatchEvent(new CustomEvent('pagechange', { detail: { page, total } }));
         },
       });
 
-      this.isLoading = false;
+      if (this.isLoading) {
+        this.isLoading = false;
+      }
       this.updateTumblrNavigation();
       this.updateCachedPostCount();
 
@@ -774,13 +804,16 @@ export class SpeedReader extends LitElement {
 
       this.dispatchEvent(new CustomEvent('ready'));
     } catch (err) {
-      this.error = {
-        type: 'LOAD_FAILED',
+      const newError = {
+        type: 'LOAD_FAILED' as const,
         message: err instanceof Error ? err.message : 'Failed to load Tumblr post',
         retryable: true,
       };
-      this.isLoading = false;
-      this.dispatchEvent(new CustomEvent('error', { detail: this.error }));
+      this.error = newError;
+      if (this.isLoading) {
+        this.isLoading = false;
+      }
+      this.dispatchEvent(new CustomEvent('error', { detail: newError }));
     }
   }
 
