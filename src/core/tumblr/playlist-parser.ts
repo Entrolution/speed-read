@@ -34,69 +34,64 @@ export function extractTumblrUrls(text: string): string[] {
   // Pattern for username.tumblr.com URLs: https://username.tumblr.com/post/123456/slug
   const subdomainPattern = /https?:\/\/[a-zA-Z0-9_-]+\.tumblr\.com\/post\/\d+[^\s<>"'\]]*/gi;
 
-  // Check if this looks like HTML content
-  const isHtml = /<a\s|href=/i.test(text);
+  // For HTML content, resolve anchor hrefs inline so that a single plain-text
+  // pass preserves document order for both linked and bare URLs.
+  let processedText = text;
+  const isHtml = /<[a-z][\s>]/i.test(text);
 
   if (isHtml) {
-    // Extract URLs from anchor tags
-    // This handles Google Docs HTML export where URLs are in href attributes
-    // Google Docs wraps external links: https://www.google.com/url?q=https://tumblr.com/...
-    const hrefPattern = /href=["']([^"']*)["']/gi;
-    let hrefMatch;
-    while ((hrefMatch = hrefPattern.exec(text)) !== null) {
-      let url = hrefMatch[1];
-      // Decode HTML entities (Google Docs may encode ampersands)
-      url = url.replace(/&amp;/g, '&');
+    // Replace <a> tags whose href resolves to a Tumblr URL with the unwrapped
+    // URL as plain text (in place). Non-Tumblr anchors are left untouched so
+    // their inner content is preserved after the subsequent tag strip.
+    processedText = processedText.replace(
+      /<a\s[^>]*href=["']([^"']*)["'][^>]*>[\s\S]*?<\/a>/gi,
+      (_match, href: string) => {
+        let url = href.replace(/&amp;/g, '&');
 
-      // Unwrap Google redirect URLs
-      if (url.includes('google.com/url')) {
-        const qMatch = url.match(/[?&]q=([^&]+)/);
-        if (qMatch) {
-          url = decodeURIComponent(qMatch[1]);
+        // Unwrap Google redirect URLs
+        if (url.includes('google.com/url')) {
+          const qMatch = url.match(/[?&]q=([^&]+)/);
+          if (qMatch) {
+            url = decodeURIComponent(qMatch[1]);
+          }
         }
-      }
 
-      // Only process Tumblr URLs
-      if (!url.includes('tumblr.com')) {
-        continue;
-      }
+        if (url.includes('tumblr.com')) {
+          return ' ' + url + ' ';
+        }
 
-      const cleaned = cleanUrl(url);
-      if (cleaned && !seen.has(cleaned)) {
-        seen.add(cleaned);
-        urls.push(cleaned);
+        return _match;
       }
-    }
+    );
+
+    // Strip remaining HTML tags so URLs split across <span>s are reassembled
+    processedText = processedText.replace(/<[^>]+>/g, '');
   }
 
-  // For non-HTML content, check for plain text URLs
-  // Skip this if we already found URLs from HTML to avoid duplicates from href values
-  if (!isHtml || urls.length === 0) {
-    for (const line of text.split('\n')) {
-      const trimmed = line.trim();
+  // Single plain-text pass — document order is preserved
+  for (const line of processedText.split('\n')) {
+    const trimmed = line.trim();
 
-      // Try tumblr.com pattern
-      const tumblrComMatches = trimmed.match(tumblrComPattern);
-      if (tumblrComMatches) {
-        for (const match of tumblrComMatches) {
-          // Clean up the URL - remove trailing punctuation
-          const cleaned = cleanUrl(match);
-          if (cleaned && !seen.has(cleaned)) {
-            seen.add(cleaned);
-            urls.push(cleaned);
-          }
+    // Try tumblr.com pattern
+    const tumblrComMatches = trimmed.match(tumblrComPattern);
+    if (tumblrComMatches) {
+      for (const match of tumblrComMatches) {
+        const cleaned = cleanUrl(match);
+        if (cleaned && !seen.has(cleaned)) {
+          seen.add(cleaned);
+          urls.push(cleaned);
         }
       }
+    }
 
-      // Try subdomain pattern
-      const subdomainMatches = trimmed.match(subdomainPattern);
-      if (subdomainMatches) {
-        for (const match of subdomainMatches) {
-          const cleaned = cleanUrl(match);
-          if (cleaned && !seen.has(cleaned)) {
-            seen.add(cleaned);
-            urls.push(cleaned);
-          }
+    // Try subdomain pattern
+    const subdomainMatches = trimmed.match(subdomainPattern);
+    if (subdomainMatches) {
+      for (const match of subdomainMatches) {
+        const cleaned = cleanUrl(match);
+        if (cleaned && !seen.has(cleaned)) {
+          seen.add(cleaned);
+          urls.push(cleaned);
         }
       }
     }
