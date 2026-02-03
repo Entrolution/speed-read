@@ -1,7 +1,6 @@
-import { BaseReader } from './base-reader';
+import { BaseVisualReader } from './base-visual-reader';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
-import type { TocItem, FitMode, LayoutMode } from '@/types';
-import { clampZoom } from '@/core/utils';
+import type { TocItem } from '@/types';
 
 interface PdfOutlineItem {
   title: string;
@@ -12,7 +11,7 @@ interface PdfOutlineItem {
 /**
  * PDF reader using pdf.js with web worker support
  */
-export class PdfReader extends BaseReader {
+export class PdfReader extends BaseVisualReader {
   private pdfDoc: PDFDocumentProxy | null = null;
   private canvas: HTMLCanvasElement | null = null;
   private canvas2: HTMLCanvasElement | null = null; // For 2-page layout
@@ -22,12 +21,6 @@ export class PdfReader extends BaseReader {
   private currentRenderTask: RenderTask | null = null;
   private currentRenderTask2: RenderTask | null = null;
   private onPageChangeCallback?: (page: number, total: number) => void;
-
-  // Zoom and layout state
-  private zoomLevel = 1.0;
-  private fitMode: FitMode = 'page';
-  private layoutMode: LayoutMode = '1-page';
-  private cachedToc: TocItem[] | null = null;
   private pagesContainer: HTMLDivElement | null = null;
 
   // Cache for page viewport dimensions (avoids repeated getViewport calls)
@@ -335,58 +328,14 @@ export class PdfReader extends BaseReader {
   }
 
   /**
-   * Get current zoom level
+   * Re-render when display settings change
    */
-  getZoom(): number {
-    return this.zoomLevel;
-  }
-
-  /**
-   * Set zoom level
-   */
-  setZoom(level: number): void {
-    this.zoomLevel = clampZoom(level);
-    this.fitMode = 'none';
-    // Re-render current page with new zoom
+  protected onDisplayChange(): void {
     const currentPage = this.pageController.currentPage;
     this.renderPage(currentPage);
   }
 
-  /**
-   * Get current fit mode
-   */
-  getFitMode(): FitMode {
-    return this.fitMode;
-  }
-
-  /**
-   * Set fit mode
-   */
-  setFitMode(mode: FitMode): void {
-    this.fitMode = mode;
-    // Re-render current page with new fit mode
-    const currentPage = this.pageController.currentPage;
-    this.renderPage(currentPage);
-  }
-
-  /**
-   * Get current layout mode
-   */
-  getLayout(): LayoutMode {
-    return this.layoutMode;
-  }
-
-  /**
-   * Set layout mode (1-page or 2-page)
-   */
-  setLayout(layout: LayoutMode): void {
-    this.layoutMode = layout;
-    // Re-render current page with new layout
-    const currentPage = this.pageController.currentPage;
-    this.renderPage(currentPage);
-  }
-
-  destroy(): void {
+  override destroy(): void {
     if (this.currentRenderTask) {
       this.currentRenderTask.cancel();
       this.currentRenderTask = null;
@@ -404,7 +353,6 @@ export class PdfReader extends BaseReader {
     this.ctx = null;
     this.ctx2 = null;
     this.pagesContainer = null;
-    this.cachedToc = null;
     this.viewportCache.clear();
     super.destroy();
   }
