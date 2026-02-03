@@ -1,7 +1,7 @@
 /// <reference types="../types/foliate-js" />
-import { BaseReader } from './base-reader';
-import type { ReaderNavigation, TocItem, FitMode, LayoutMode } from '@/types';
-import { setupKeyboardNavigation, ensureFocusable, clampZoom } from '@/core/utils';
+import { BaseVisualReader } from './base-visual-reader';
+import type { ReaderNavigation, TocItem } from '@/types';
+import { setupKeyboardNavigation, ensureFocusable } from '@/core/utils';
 
 // foliate-js TOC item structure
 interface FoliateTocItem {
@@ -45,7 +45,7 @@ type FoliateView = HTMLElement & {
 /**
  * EPUB reader using foliate-js
  */
-export class EpubReader extends BaseReader {
+export class EpubReader extends BaseVisualReader {
   private view: FoliateView | null = null;
   private wrapper: HTMLDivElement | null = null;
   private totalLocations = 0;
@@ -57,12 +57,6 @@ export class EpubReader extends BaseReader {
   // Event handlers stored for cleanup
   private cleanupKeyboardNav: (() => void) | null = null;
   private boundRelocateHandler: EventListener | null = null;
-
-  // Zoom and layout state
-  private zoomLevel = 1.0;
-  private fitMode: FitMode = 'page';
-  private layoutMode: LayoutMode = '1-page';
-  private cachedToc: TocItem[] | null = null;
 
   async load(data: ArrayBuffer, container: HTMLElement): Promise<void> {
     // Import foliate-js view module (registers foliate-view custom element)
@@ -278,48 +272,10 @@ export class EpubReader extends BaseReader {
   }
 
   /**
-   * Get current zoom level
+   * Re-render when display settings change
    */
-  getZoom(): number {
-    return this.zoomLevel;
-  }
-
-  /**
-   * Set zoom level
-   */
-  setZoom(level: number): void {
-    this.zoomLevel = clampZoom(level);
-    this.fitMode = 'none';
+  protected onDisplayChange(): void {
     this.applyZoom();
-  }
-
-  /**
-   * Get current fit mode
-   */
-  getFitMode(): FitMode {
-    return this.fitMode;
-  }
-
-  /**
-   * Set fit mode
-   */
-  setFitMode(mode: FitMode): void {
-    this.fitMode = mode;
-    this.applyZoom();
-  }
-
-  /**
-   * Get current layout mode
-   */
-  getLayout(): LayoutMode {
-    return this.layoutMode;
-  }
-
-  /**
-   * Set layout mode (1-page or 2-page)
-   */
-  setLayout(layout: LayoutMode): void {
-    this.layoutMode = layout;
     this.applyLayout();
   }
 
@@ -352,7 +308,7 @@ export class EpubReader extends BaseReader {
     // need to reload the book with different column settings
   }
 
-  destroy(): void {
+  override destroy(): void {
     // Remove event listeners
     if (this.cleanupKeyboardNav) {
       this.cleanupKeyboardNav();
@@ -381,7 +337,6 @@ export class EpubReader extends BaseReader {
     }
     this.totalLocations = 0;
     this.currentLocation = 1;
-    this.cachedToc = null;
     super.destroy();
   }
 }

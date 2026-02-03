@@ -1,12 +1,11 @@
-import { BaseReader } from './base-reader';
+import { BaseVisualReader } from './base-visual-reader';
 import type {
   ZipEntry,
   WorkerResponse,
   ParseResponse,
   ExtractResponse,
 } from '../workers/zip-extractor.worker';
-import type { TocItem, FitMode, LayoutMode } from '@/types';
-import { clampZoom } from '@/core/utils';
+import type { TocItem } from '@/types';
 
 /**
  * CBZ (Comic Book ZIP) reader with lazy loading and Web Worker extraction
@@ -16,7 +15,7 @@ import { clampZoom } from '@/core/utils';
  * - LRU cache prevents memory bloat
  * - Preloads adjacent pages for smooth navigation
  */
-export class CbzReader extends BaseReader {
+export class CbzReader extends BaseVisualReader {
   private worker: Worker | null = null;
   private entries: ZipEntry[] = [];
   private currentImage: HTMLImageElement | null = null;
@@ -35,11 +34,6 @@ export class CbzReader extends BaseReader {
   // Track navigation direction for adaptive preloading
   private lastPageNum = 1;
 
-  // Zoom and layout state
-  private zoomLevel = 1.0;
-  private fitMode: FitMode = 'page';
-  private layoutMode: LayoutMode = '1-page';
-  private cachedToc: TocItem[] | null = null;
   private pagesContainer: HTMLDivElement | null = null;
 
   async load(data: ArrayBuffer, container: HTMLElement): Promise<void> {
@@ -399,55 +393,13 @@ export class CbzReader extends BaseReader {
   }
 
   /**
-   * Get current zoom level
+   * Re-render when display settings change
    */
-  getZoom(): number {
-    return this.zoomLevel;
-  }
-
-  /**
-   * Set zoom level
-   */
-  setZoom(level: number): void {
-    this.zoomLevel = clampZoom(level);
-    this.fitMode = 'none';
-    // Re-render current page
+  protected onDisplayChange(): void {
     this.renderPage(this.currentPageNum);
   }
 
-  /**
-   * Get current fit mode
-   */
-  getFitMode(): FitMode {
-    return this.fitMode;
-  }
-
-  /**
-   * Set fit mode
-   */
-  setFitMode(mode: FitMode): void {
-    this.fitMode = mode;
-    // Re-render current page
-    this.renderPage(this.currentPageNum);
-  }
-
-  /**
-   * Get current layout mode
-   */
-  getLayout(): LayoutMode {
-    return this.layoutMode;
-  }
-
-  /**
-   * Set layout mode (1-page or 2-page)
-   */
-  setLayout(layout: LayoutMode): void {
-    this.layoutMode = layout;
-    // Re-render current page
-    this.renderPage(this.currentPageNum);
-  }
-
-  destroy(): void {
+  override destroy(): void {
     // Terminate worker
     if (this.worker) {
       this.worker.terminate();
@@ -465,7 +417,6 @@ export class CbzReader extends BaseReader {
     this.currentImage = null;
     this.secondImage = null;
     this.pagesContainer = null;
-    this.cachedToc = null;
     this.onPageChangeCallback = undefined;
 
     super.destroy();
