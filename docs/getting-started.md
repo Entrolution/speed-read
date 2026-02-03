@@ -122,6 +122,27 @@ export default App;
 </script>
 ```
 
+## Tumblr Posts
+
+Read Tumblr post series with automatic navigation between linked posts:
+
+```html
+<speed-reader tumblr="https://www.tumblr.com/username/post-id/slug"></speed-reader>
+```
+
+Posts are fetched via CORS proxy and cached locally. The reader automatically detects and follows "next" and "previous" post links for series navigation.
+
+### Custom CORS Proxy
+
+If the default proxies don't work, specify your own:
+
+```html
+<speed-reader
+  tumblr="https://www.tumblr.com/username/post-id/slug"
+  tumblr-proxy="https://my-cors-proxy.com/?url=">
+</speed-reader>
+```
+
 ## Episodic Content
 
 For serial content like web novels or webcomics, use a manifest:
@@ -193,15 +214,7 @@ reader.addEventListener('error', (e) => {
 
 ## Error Handling
 
-The reader detects and reports various error conditions:
-
-| Error Type | Description |
-|------------|-------------|
-| `FILE_TOO_LARGE` | File exceeds size limit |
-| `INVALID_FORMAT` | Unrecognized file format |
-| `DRM_PROTECTED` | File has DRM protection |
-| `LOAD_FAILED` | Network or parsing error |
-| `CORS_ERROR` | Cross-origin request blocked |
+The reader detects and reports various error conditions. See the [API Reference](./api-reference.md#readererror) for the complete list of error types.
 
 ### Example error handler
 
