@@ -1,6 +1,7 @@
 /// <reference types="../types/foliate-js" />
 import { BaseReader } from './base-reader';
 import type { ReaderNavigation, TocItem, FitMode, LayoutMode } from '@/types';
+import { setupKeyboardNavigation, ensureFocusable, clampZoom } from '@/core/utils';
 
 // foliate-js TOC item structure
 interface FoliateTocItem {
@@ -54,7 +55,7 @@ export class EpubReader extends BaseReader {
   private pendingLocation: { current: number; total: number } | null = null;
 
   // Event handlers stored for cleanup
-  private boundKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private cleanupKeyboardNav: (() => void) | null = null;
   private boundRelocateHandler: EventListener | null = null;
 
   // Zoom and layout state
@@ -176,32 +177,13 @@ export class EpubReader extends BaseReader {
    * Set up keyboard navigation for EPUB
    */
   private setupKeyboardNavigation(container: HTMLElement): void {
-    this.boundKeyHandler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
+    this.cleanupKeyboardNav = setupKeyboardNavigation({
+      onNext: () => this.view?.next(),
+      onPrev: () => this.view?.prev(),
+      handleSpace: true,
+    });
 
-      switch (e.key) {
-        case 'ArrowRight':
-        case 'ArrowDown':
-        case ' ':
-          e.preventDefault();
-          this.view?.next();
-          break;
-        case 'ArrowLeft':
-        case 'ArrowUp':
-          e.preventDefault();
-          this.view?.prev();
-          break;
-      }
-    };
-
-    document.addEventListener('keydown', this.boundKeyHandler);
-
-    // Make container focusable
-    if (!container.hasAttribute('tabindex')) {
-      container.setAttribute('tabindex', '0');
-    }
+    ensureFocusable(container);
   }
 
   /**
@@ -306,7 +288,7 @@ export class EpubReader extends BaseReader {
    * Set zoom level
    */
   setZoom(level: number): void {
-    this.zoomLevel = Math.max(0.5, Math.min(3.0, level));
+    this.zoomLevel = clampZoom(level);
     this.fitMode = 'none';
     this.applyZoom();
   }
@@ -372,9 +354,9 @@ export class EpubReader extends BaseReader {
 
   destroy(): void {
     // Remove event listeners
-    if (this.boundKeyHandler) {
-      document.removeEventListener('keydown', this.boundKeyHandler);
-      this.boundKeyHandler = null;
+    if (this.cleanupKeyboardNav) {
+      this.cleanupKeyboardNav();
+      this.cleanupKeyboardNav = null;
     }
     if (this.view && this.boundRelocateHandler) {
       this.view.removeEventListener('relocate', this.boundRelocateHandler);

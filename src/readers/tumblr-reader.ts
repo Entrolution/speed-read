@@ -23,6 +23,7 @@ import {
   createLoadingHtml,
   createErrorHtml,
   setupRetryListener,
+  setupKeyboardNavigation,
 } from '@/core/utils';
 
 export interface TumblrReaderOptions {
@@ -45,7 +46,7 @@ export class TumblrReader implements FormatReader {
   private customProxy?: string;
   private onPageChangeCallback?: (page: number, total: number) => void;
   private isLoading = false;
-  private boundKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private cleanupKeyboardNav: (() => void) | null = null;
 
   /**
    * Load a Tumblr post from URL
@@ -193,30 +194,15 @@ export class TumblrReader implements FormatReader {
    * Set up keyboard navigation
    */
   private setupKeyboardNavigation(): void {
-    this.boundKeyHandler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      switch (e.key) {
-        case 'ArrowRight':
-        case 'ArrowDown':
-          if (!this.isLoading && this.canGoNext()) {
-            e.preventDefault();
-            this.next();
-          }
-          break;
-        case 'ArrowLeft':
-        case 'ArrowUp':
-          if (!this.isLoading && this.canGoPrev()) {
-            e.preventDefault();
-            this.prev();
-          }
-          break;
-      }
-    };
-
-    document.addEventListener('keydown', this.boundKeyHandler);
+    this.cleanupKeyboardNav = setupKeyboardNavigation({
+      onNext: () => {
+        if (this.canGoNext()) this.next();
+      },
+      onPrev: () => {
+        if (this.canGoPrev()) this.prev();
+      },
+      canNavigate: () => !this.isLoading,
+    });
   }
 
   /**
@@ -372,9 +358,9 @@ export class TumblrReader implements FormatReader {
    * Clean up resources
    */
   destroy(): void {
-    if (this.boundKeyHandler) {
-      document.removeEventListener('keydown', this.boundKeyHandler);
-      this.boundKeyHandler = null;
+    if (this.cleanupKeyboardNav) {
+      this.cleanupKeyboardNav();
+      this.cleanupKeyboardNav = null;
     }
 
     this.container = null;

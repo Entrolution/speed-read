@@ -31,6 +31,7 @@ import {
   createErrorHtml,
   createSkeletonHtml,
   setupRetryListener,
+  setupKeyboardNavigation,
 } from '@/core/utils';
 
 export interface TumblrPlaylistReaderOptions {
@@ -67,7 +68,7 @@ export class TumblrPlaylistReader implements FormatReader {
   private onPageChangeCallback?: (page: number, total: number) => void;
   private onTocUpdateCallback?: () => void;
   private isLoading = false;
-  private boundKeyHandler: ((e: KeyboardEvent) => void) | null = null;
+  private cleanupKeyboardNav: (() => void) | null = null;
   private isPrefetching = false;
   private prefetchProgress = 0;
 
@@ -465,9 +466,9 @@ export class TumblrPlaylistReader implements FormatReader {
    * Clean up resources
    */
   destroy(): void {
-    if (this.boundKeyHandler) {
-      document.removeEventListener('keydown', this.boundKeyHandler);
-      this.boundKeyHandler = null;
+    if (this.cleanupKeyboardNav) {
+      this.cleanupKeyboardNav();
+      this.cleanupKeyboardNav = null;
     }
 
     this.container = null;
@@ -492,30 +493,15 @@ export class TumblrPlaylistReader implements FormatReader {
    * Set up keyboard navigation
    */
   private setupKeyboardNavigation(): void {
-    this.boundKeyHandler = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
-        return;
-      }
-
-      switch (e.key) {
-        case 'ArrowRight':
-        case 'ArrowDown':
-          if (!this.isLoading && this.hasNavigation().canNext) {
-            e.preventDefault();
-            this.next();
-          }
-          break;
-        case 'ArrowLeft':
-        case 'ArrowUp':
-          if (!this.isLoading && this.hasNavigation().canPrev) {
-            e.preventDefault();
-            this.prev();
-          }
-          break;
-      }
-    };
-
-    document.addEventListener('keydown', this.boundKeyHandler);
+    this.cleanupKeyboardNav = setupKeyboardNavigation({
+      onNext: () => {
+        if (this.hasNavigation().canNext) this.next();
+      },
+      onPrev: () => {
+        if (this.hasNavigation().canPrev) this.prev();
+      },
+      canNavigate: () => !this.isLoading,
+    });
   }
 
   /**

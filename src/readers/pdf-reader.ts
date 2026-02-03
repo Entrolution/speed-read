@@ -1,6 +1,7 @@
 import { BaseReader } from './base-reader';
 import type { PDFDocumentProxy, RenderTask } from 'pdfjs-dist';
 import type { TocItem, FitMode, LayoutMode } from '@/types';
+import { clampZoom } from '@/core/utils';
 
 interface PdfOutlineItem {
   title: string;
@@ -337,7 +338,7 @@ export class PdfReader extends BaseReader {
    * Set zoom level
    */
   setZoom(level: number): void {
-    this.zoomLevel = Math.max(0.5, Math.min(3.0, level));
+    this.zoomLevel = clampZoom(level);
     this.fitMode = 'none';
     // Re-render current page with new zoom
     const currentPage = this.pageController.currentPage;

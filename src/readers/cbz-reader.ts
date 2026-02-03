@@ -6,6 +6,7 @@ import type {
   ExtractResponse,
 } from '../workers/zip-extractor.worker';
 import type { TocItem, FitMode, LayoutMode } from '@/types';
+import { clampZoom } from '@/core/utils';
 
 /**
  * CBZ (Comic Book ZIP) reader with lazy loading and Web Worker extraction
@@ -395,7 +396,7 @@ export class CbzReader extends BaseReader {
    * Set zoom level
    */
   setZoom(level: number): void {
-    this.zoomLevel = Math.max(0.5, Math.min(3.0, level));
+    this.zoomLevel = clampZoom(level);
     this.fitMode = 'none';
     // Re-render current page
     this.renderPage(this.currentPageNum);
