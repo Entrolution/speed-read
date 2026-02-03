@@ -4,6 +4,7 @@ import { ReaderEngine } from '@/core/engine';
 import { ZoomController, DisplayController } from '@/core/controller';
 import type { ReaderError, TocItem, FitMode, LayoutMode, FormatReader } from '@/types';
 import type { TumblrReader } from '@/readers/tumblr-reader';
+import type { TumblrPlaylistReader } from '@/readers/tumblr-playlist-reader';
 
 // Import UI components (registers custom elements)
 import './ui/toolbar';
@@ -467,6 +468,95 @@ export class SpeedReader extends LitElement {
       opacity: 0.5;
       cursor: not-allowed;
     }
+
+    .prefetch-btn {
+      padding: 0.375rem 0.75rem;
+      background: transparent;
+      color: var(--speed-reader-accent, #0066cc);
+      border: 1px solid var(--speed-reader-accent, #0066cc);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      min-width: 80px;
+      text-align: center;
+    }
+
+    .prefetch-btn:hover:not(:disabled) {
+      background: rgba(0, 102, 204, 0.1);
+    }
+
+    .prefetch-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Skeleton loading styles */
+    .tumblr-skeleton {
+      animation: none;
+    }
+
+    .tumblr-loading-info {
+      font-size: 0.875rem;
+      color: var(--speed-reader-text, #666);
+      opacity: 0.8;
+      margin-bottom: 1.5rem;
+      text-align: center;
+    }
+
+    .tumblr-skeleton .skeleton-header {
+      height: 200px;
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 8px;
+      margin-bottom: 1.5rem;
+    }
+
+    .tumblr-skeleton .skeleton-author {
+      height: 1.5rem;
+      width: 120px;
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+      margin-bottom: 1rem;
+    }
+
+    .tumblr-skeleton .skeleton-line {
+      height: 1rem;
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s infinite;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    .skeleton-line--full { width: 100%; }
+    .skeleton-line--80 { width: 80%; }
+    .skeleton-line--60 { width: 60%; }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .tumblr-skeleton .skeleton-header,
+      .tumblr-skeleton .skeleton-author,
+      .tumblr-skeleton .skeleton-line {
+        animation: none;
+        background: #e0e0e0;
+      }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .tumblr-skeleton .skeleton-header,
+      .tumblr-skeleton .skeleton-author,
+      .tumblr-skeleton .skeleton-line {
+        background: linear-gradient(90deg, #333 25%, #444 50%, #333 75%);
+        background-size: 200% 100%;
+      }
+    }
   `;
 
   /**
@@ -499,6 +589,12 @@ export class SpeedReader extends LitElement {
    */
   @property({ type: String, attribute: 'tumblr-proxy' })
   tumblrProxy?: string;
+
+  /**
+   * Google Doc URL containing Tumblr post URLs as a playlist
+   */
+  @property({ type: String, attribute: 'tumblr-playlist' })
+  tumblrPlaylist?: string;
 
 
   @state()
@@ -535,6 +631,18 @@ export class SpeedReader extends LitElement {
   private isTumblrMode = false;
 
   @state()
+  private isTumblrPlaylistMode = false;
+
+  @state()
+  private isPrefetching = false;
+
+  @state()
+  private prefetchProgress = 0;
+
+  @state()
+  private totalPosts = 0;
+
+  @state()
   private isExporting = false;
 
   @state()
@@ -551,6 +659,7 @@ export class SpeedReader extends LitElement {
 
   private engine: ReaderEngine | null = null;
   private tumblrReader: TumblrReader | null = null;
+  private tumblrPlaylistReader: TumblrPlaylistReader | null = null;
   private contentRef: HTMLElement | null = null;
   private zoomController: ZoomController;
   private displayController: DisplayController;
@@ -593,6 +702,8 @@ export class SpeedReader extends LitElement {
     this.engine = null;
     this.tumblrReader?.destroy();
     this.tumblrReader = null;
+    this.tumblrPlaylistReader?.destroy();
+    this.tumblrPlaylistReader = null;
 
     if (this.boundKeyHandler) {
       document.removeEventListener('keydown', this.boundKeyHandler);
@@ -616,17 +727,19 @@ export class SpeedReader extends LitElement {
   }
 
   override updated(changedProps: PropertyValues): void {
-    // Re-initialize reader when src, manifest, or tumblr changes
+    // Re-initialize reader when src, manifest, tumblr, or tumblrPlaylist changes
     // Skip the very first update (handled by firstUpdated)
     const srcChanged = changedProps.has('src');
     const manifestChanged = changedProps.has('manifest');
     const tumblrChanged = changedProps.has('tumblr');
+    const tumblrPlaylistChanged = changedProps.has('tumblrPlaylist');
 
-    if (srcChanged || manifestChanged || tumblrChanged) {
+    if (srcChanged || manifestChanged || tumblrChanged || tumblrPlaylistChanged) {
       // Get old values - if ALL were undefined, this is probably initial render
       const oldSrc = changedProps.get('src');
       const oldManifest = changedProps.get('manifest');
       const oldTumblr = changedProps.get('tumblr');
+      const oldTumblrPlaylist = changedProps.get('tumblrPlaylist');
 
       // Re-init if: old value existed (changing from one source to another)
       // OR new value exists and we're changing TO it (dynamic attribute set)
@@ -634,7 +747,9 @@ export class SpeedReader extends LitElement {
         oldSrc !== undefined ||
         oldManifest !== undefined ||
         oldTumblr !== undefined ||
+        oldTumblrPlaylist !== undefined ||
         (this.tumblr && tumblrChanged) ||
+        (this.tumblrPlaylist && tumblrPlaylistChanged) ||
         (this.src && srcChanged) ||
         (this.manifest && manifestChanged);
 
@@ -648,9 +763,15 @@ export class SpeedReader extends LitElement {
 
   private async initReader(): Promise<void> {
     if (!this.contentRef) return;
-    if (!this.src && !this.manifest && !this.tumblr) return;
+    if (!this.src && !this.manifest && !this.tumblr && !this.tumblrPlaylist) return;
 
     this.resetReaderState();
+
+    // Check tumblr-playlist first (takes priority)
+    if (this.tumblrPlaylist) {
+      await this.loadTumblrPlaylist(this.tumblrPlaylist);
+      return;
+    }
 
     // Check if this is a Tumblr URL
     if (this.tumblr) {
@@ -681,11 +802,23 @@ export class SpeedReader extends LitElement {
     if (this.isTumblrMode) {
       this.isTumblrMode = false;
     }
+    if (this.isTumblrPlaylistMode) {
+      this.isTumblrPlaylistMode = false;
+    }
     if (this.tumblrCanPrev) {
       this.tumblrCanPrev = false;
     }
     if (this.tumblrCanNext) {
       this.tumblrCanNext = false;
+    }
+    if (this.isPrefetching) {
+      this.isPrefetching = false;
+    }
+    if (this.prefetchProgress !== 0) {
+      this.prefetchProgress = 0;
+    }
+    if (this.totalPosts !== 0) {
+      this.totalPosts = 0;
     }
 
     // Reset controllers
@@ -697,6 +830,8 @@ export class SpeedReader extends LitElement {
     this.engine = null;
     this.tumblrReader?.destroy();
     this.tumblrReader = null;
+    this.tumblrPlaylistReader?.destroy();
+    this.tumblrPlaylistReader = null;
   }
 
   /**
@@ -818,11 +953,91 @@ export class SpeedReader extends LitElement {
   }
 
   /**
+   * Load a Tumblr playlist from Google Doc URL
+   */
+  private async loadTumblrPlaylist(playlistUrl: string): Promise<void> {
+    if (!this.contentRef) return;
+
+    this.isTumblrMode = true;
+    this.isTumblrPlaylistMode = true;
+
+    try {
+      // Dynamically import TumblrPlaylistReader
+      const { TumblrPlaylistReader } = await import('@/readers/tumblr-playlist-reader');
+      this.tumblrPlaylistReader = new TumblrPlaylistReader();
+
+      await this.tumblrPlaylistReader.loadFromPlaylist(playlistUrl, this.contentRef, {
+        customProxy: this.tumblrProxy,
+        onPageChange: (page, total) => {
+          if (this.currentPage !== page) {
+            this.currentPage = page;
+          }
+          if (this.totalPages !== total) {
+            this.totalPages = total;
+          }
+          this.updatePlaylistNavigation();
+          this.updateCachedPostCount();
+          this.dispatchEvent(new CustomEvent('pagechange', { detail: { page, total } }));
+        },
+        onTocUpdate: () => {
+          // Update ToC when labels change after loading posts
+          if (this.tumblrPlaylistReader) {
+            this.tocItems = this.tumblrPlaylistReader.getToc();
+          }
+        },
+      });
+
+      // Load ToC from playlist (it has ToC support)
+      this.tocItems = this.tumblrPlaylistReader.getToc();
+      this.totalPosts = this.tumblrPlaylistReader.getTotalPosts();
+
+      if (this.isLoading) {
+        this.isLoading = false;
+      }
+      this.updatePlaylistNavigation();
+      this.updateCachedPostCount();
+
+      // Check overflow state
+      requestAnimationFrame(() => {
+        this.updateOverflowState();
+      });
+
+      this.dispatchEvent(new CustomEvent('ready'));
+    } catch (err) {
+      const newError = {
+        type: 'LOAD_FAILED' as const,
+        message: err instanceof Error ? err.message : 'Failed to load Tumblr playlist',
+        retryable: true,
+      };
+      this.error = newError;
+      if (this.isLoading) {
+        this.isLoading = false;
+      }
+      this.dispatchEvent(new CustomEvent('error', { detail: newError }));
+    }
+  }
+
+  /**
    * Update Tumblr navigation state (guards against no-op updates)
    */
   private updateTumblrNavigation(): void {
     if (this.tumblrReader) {
       const nav = this.tumblrReader.hasNavigation();
+      if (this.tumblrCanPrev !== nav.canPrev) {
+        this.tumblrCanPrev = nav.canPrev;
+      }
+      if (this.tumblrCanNext !== nav.canNext) {
+        this.tumblrCanNext = nav.canNext;
+      }
+    }
+  }
+
+  /**
+   * Update playlist navigation state
+   */
+  private updatePlaylistNavigation(): void {
+    if (this.tumblrPlaylistReader) {
+      const nav = this.tumblrPlaylistReader.hasNavigation();
       if (this.tumblrCanPrev !== nav.canPrev) {
         this.tumblrCanPrev = nav.canPrev;
       }
@@ -945,7 +1160,10 @@ export class SpeedReader extends LitElement {
   }
 
   private async handlePrev(): Promise<void> {
-    if (this.isTumblrMode && this.tumblrReader) {
+    if (this.isTumblrPlaylistMode && this.tumblrPlaylistReader) {
+      await this.tumblrPlaylistReader.prev();
+      this.updatePlaylistNavigation();
+    } else if (this.isTumblrMode && this.tumblrReader) {
       await this.tumblrReader.prev();
       this.updateTumblrNavigation();
     } else {
@@ -954,7 +1172,10 @@ export class SpeedReader extends LitElement {
   }
 
   private async handleNext(): Promise<void> {
-    if (this.isTumblrMode && this.tumblrReader) {
+    if (this.isTumblrPlaylistMode && this.tumblrPlaylistReader) {
+      await this.tumblrPlaylistReader.next();
+      this.updatePlaylistNavigation();
+    } else if (this.isTumblrMode && this.tumblrReader) {
       await this.tumblrReader.next();
       this.updateTumblrNavigation();
     } else {
@@ -966,14 +1187,17 @@ export class SpeedReader extends LitElement {
    * Export cached Tumblr posts as EPUB
    */
   private async handleExport(): Promise<void> {
-    if (!this.tumblrReader || this.isExporting) return;
+    const reader = this.tumblrPlaylistReader || this.tumblrReader;
+    if (!reader || this.isExporting) return;
 
     this.isExporting = true;
     this.exportProgress = 'Starting...';
 
     try {
-      const title = this.tumblrReader.getBlogName() || 'Tumblr Export';
-      const blob = await this.tumblrReader.exportAsEpub((progress) => {
+      const title = this.isTumblrPlaylistMode
+        ? (this.tumblrPlaylistReader?.getDefaultEpubTitle() || 'Tumblr Playlist')
+        : (reader.getBlogName() || 'Tumblr Export');
+      const blob = await reader.exportAsEpub((progress) => {
         this.exportProgress = progress.message;
       }, title);
       // Sanitize filename: remove/replace invalid characters
@@ -1022,7 +1246,12 @@ export class SpeedReader extends LitElement {
    * Clear the Tumblr post cache
    */
   private handleClearCache(): void {
-    if (this.tumblrReader) {
+    if (this.tumblrPlaylistReader) {
+      this.tumblrPlaylistReader.clearCache();
+      this.updateCachedPostCount();
+      // Update ToC to reflect cache status
+      this.tocItems = this.tumblrPlaylistReader.getToc();
+    } else if (this.tumblrReader) {
       this.tumblrReader.clearCache();
       this.updateCachedPostCount();
     }
@@ -1032,11 +1261,34 @@ export class SpeedReader extends LitElement {
    * Update the cached post count (guards against no-op updates)
    */
   private updateCachedPostCount(): void {
-    if (this.tumblrReader) {
-      const count = this.tumblrReader.getCachedPostCount();
+    const reader = this.tumblrPlaylistReader || this.tumblrReader;
+    if (reader) {
+      const count = reader.getCachedPostCount();
       if (this.cachedPostCount !== count) {
         this.cachedPostCount = count;
       }
+    }
+  }
+
+  /**
+   * Prefetch all posts in the playlist
+   */
+  private async handlePrefetchAll(): Promise<void> {
+    if (!this.tumblrPlaylistReader || this.isPrefetching) return;
+
+    this.isPrefetching = true;
+    this.prefetchProgress = 0;
+
+    try {
+      await this.tumblrPlaylistReader.prefetchAll((current, total) => {
+        this.prefetchProgress = current;
+        this.totalPosts = total;
+      });
+      this.updateCachedPostCount();
+      // Update ToC to reflect cache status
+      this.tocItems = this.tumblrPlaylistReader.getToc();
+    } finally {
+      this.isPrefetching = false;
     }
   }
 
@@ -1050,6 +1302,16 @@ export class SpeedReader extends LitElement {
 
   private async handleTocSelect(e: CustomEvent<TocItem>): Promise<void> {
     const item = e.detail;
+
+    // Handle playlist reader ToC selection
+    if (this.isTumblrPlaylistMode && this.tumblrPlaylistReader) {
+      await this.tumblrPlaylistReader.goToTocItem(item);
+      this.updatePlaylistNavigation();
+      this.updateCachedPostCount();
+      this.tocOpen = false;
+      return;
+    }
+
     const reader = this.getReader();
 
     if (reader?.goToTocItem) {
@@ -1085,6 +1347,7 @@ export class SpeedReader extends LitElement {
 
     this.resetReaderState();
     this.tumblr = undefined; // Clear so it can be set again later
+    this.tumblrPlaylist = undefined; // Clear so it can be set again later
 
     await this.initEngine(file);
   }
@@ -1109,7 +1372,9 @@ export class SpeedReader extends LitElement {
       canGoNext = this.currentPage < this.totalPages || this.currentChapter < this.totalChapters;
     }
 
+    // Playlist mode has ToC support, regular tumblr mode doesn't
     const hasToc = this.tocItems.length > 0;
+    const showToc = hasToc && (!this.isTumblrMode || this.isTumblrPlaylistMode);
     const showZoom = !this.isTumblrMode; // Tumblr mode doesn't use zoom
     const showLayout = !this.isTumblrMode; // Tumblr mode doesn't use layout
 
@@ -1121,8 +1386,8 @@ export class SpeedReader extends LitElement {
         role="application"
         aria-label="${this.isTumblrMode ? 'Tumblr reader' : 'Document reader'}"
       >
-        <!-- TOC Panel (hidden in Tumblr mode) -->
-        ${!this.isTumblrMode
+        <!-- TOC Panel (shown for non-tumblr and playlist mode) -->
+        ${showToc
           ? html`
               <toc-panel
                 .items=${this.tocItems}
@@ -1159,7 +1424,7 @@ export class SpeedReader extends LitElement {
                 .totalPages=${this.totalPages}
                 .zoomLevel=${this.zoomLevel}
                 .layout=${this.layoutMode}
-                .hasToc=${hasToc && !this.isTumblrMode}
+                .hasToc=${showToc}
                 .tocOpen=${this.tocOpen}
                 .canGoPrev=${canGoPrev}
                 .canGoNext=${canGoNext}
@@ -1176,11 +1441,27 @@ export class SpeedReader extends LitElement {
               ${this.isTumblrMode
                 ? html`
                     <div class="tumblr-controls">
-                      <span class="cache-info">${this.cachedPostCount} post${this.cachedPostCount !== 1 ? 's' : ''} cached</span>
+                      <span class="cache-info">${this.cachedPostCount} post${this.cachedPostCount !== 1 ? 's' : ''} cached${this.isTumblrPlaylistMode ? ` of ${this.totalPosts}` : ''}</span>
+                      ${this.isTumblrPlaylistMode
+                        ? html`
+                            <button
+                              class="prefetch-btn"
+                              @click=${this.handlePrefetchAll}
+                              ?disabled=${this.isPrefetching || this.isExporting || (this.tumblrPlaylistReader?.isAllCached() ?? false)}
+                              title="Load all posts into cache"
+                            >
+                              ${this.isPrefetching
+                                ? `Loading ${this.prefetchProgress}/${this.totalPosts}...`
+                                : (this.tumblrPlaylistReader?.isAllCached() ?? false)
+                                  ? 'All Cached'
+                                  : 'Load All'}
+                            </button>
+                          `
+                        : ''}
                       <button
                         class="clear-cache-btn"
                         @click=${this.handleClearCache}
-                        ?disabled=${this.isExporting || this.cachedPostCount === 0}
+                        ?disabled=${this.isExporting || this.isPrefetching || this.cachedPostCount === 0}
                         title="Clear cached posts"
                       >
                         Clear
@@ -1188,8 +1469,8 @@ export class SpeedReader extends LitElement {
                       <button
                         class="export-btn"
                         @click=${this.handleExport}
-                        ?disabled=${this.isExporting || this.cachedPostCount === 0}
-                        title="Export cached posts as EPUB"
+                        ?disabled=${this.isExporting || this.isPrefetching || this.cachedPostCount === 0}
+                        title="Export ${this.isTumblrPlaylistMode ? 'playlist' : 'cached posts'} as EPUB"
                       >
                         ${this.isExporting ? this.exportProgress || 'Exporting...' : 'Export EPUB'}
                       </button>
