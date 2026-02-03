@@ -381,17 +381,27 @@ export class TumblrReader implements FormatReader {
 
   /**
    * Export all cached posts as EPUB
+   * @param onProgress Optional progress callback
+   * @param title Optional title for the EPUB (defaults to blog name)
    */
-  async exportAsEpub(onProgress?: ProgressCallback): Promise<Blob> {
+  async exportAsEpub(onProgress?: ProgressCallback, title?: string): Promise<Blob> {
     const posts = this.cache.getAllCached();
 
     if (posts.length === 0 && this.currentPost) {
       // At least export current post
-      return generateEpub([this.currentPost], this.currentPost.blogName, onProgress);
+      const epubTitle = title || this.currentPost.blogName;
+      return generateEpub([this.currentPost], epubTitle, onProgress);
     }
 
-    const title = posts[0]?.blogName || this.currentPost?.blogName || 'Tumblr Export';
-    return generateEpub(posts, title, onProgress);
+    const epubTitle = title || posts[0]?.blogName || this.currentPost?.blogName || 'Tumblr Export';
+    return generateEpub(posts, epubTitle, onProgress);
+  }
+
+  /**
+   * Get the current blog name
+   */
+  getBlogName(): string | undefined {
+    return this.currentPost?.blogName;
   }
 
   /**

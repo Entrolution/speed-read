@@ -105,6 +105,7 @@ Or use via CDN:
 | `manifest` | string | URL to chapters manifest |
 | `tumblr` | string | Tumblr post URL |
 | `tumblr-proxy` | string | Custom CORS proxy URL (optional) |
+| `export-title` | string | Title for EPUB export (also used as filename) |
 
 #### Events
 
@@ -140,6 +141,7 @@ function App() {
 | `manifest` | `string` | Manifest URL |
 | `tumblr` | `string` | Tumblr post URL |
 | `tumblrProxy` | `string` | Custom CORS proxy URL |
+| `exportTitle` | `string` | Title for EPUB export (also used as filename) |
 | `onReady` | `() => void` | Called when ready |
 | `onPageChange` | `(page, total) => void` | Page change callback |
 | `onChapterChange` | `(chapter, total) => void` | Chapter change callback |

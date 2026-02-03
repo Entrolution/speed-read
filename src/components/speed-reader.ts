@@ -500,6 +500,12 @@ export class SpeedReader extends LitElement {
   @property({ type: String, attribute: 'tumblr-proxy' })
   tumblrProxy?: string;
 
+  /**
+   * Title for EPUB export (also used as filename)
+   */
+  @property({ type: String, attribute: 'export-title' })
+  exportTitle?: string;
+
   @state()
   private currentPage = 0;
 
@@ -938,13 +944,17 @@ export class SpeedReader extends LitElement {
     this.exportProgress = 'Starting...';
 
     try {
+      // Use exportTitle if set, otherwise fall back to blog name
+      const title = this.exportTitle || this.tumblrReader.getBlogName() || 'Tumblr Export';
       const blob = await this.tumblrReader.exportAsEpub((progress) => {
         this.exportProgress = progress.message;
-      });
+      }, title);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'tumblr-export.epub';
+      // Sanitize filename: remove/replace invalid characters
+      const safeFilename = title.replace(/[<>:"/\\|?*]/g, '-').trim() || 'tumblr-export';
+      a.download = `${safeFilename}.epub`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
