@@ -133,11 +133,16 @@ export class PdfReader extends BaseReader {
     // Calculate scale based on fit mode and zoom level
     this.scale = this.calculateScale(page);
 
-    const viewport = page.getViewport({ scale: this.scale });
+    // HiDPI support: render at device pixel ratio for sharp display
+    const dpr = window.devicePixelRatio || 1;
+    const viewport = page.getViewport({ scale: this.scale * dpr });
 
-    // Set canvas dimensions
+    // Set canvas backing store dimensions (actual pixels)
     this.canvas.width = viewport.width;
     this.canvas.height = viewport.height;
+    // Set CSS dimensions (logical pixels)
+    this.canvas.style.width = `${viewport.width / dpr}px`;
+    this.canvas.style.height = `${viewport.height / dpr}px`;
     this.canvas.style.display = 'block';
 
     // Prepare render tasks
@@ -148,9 +153,11 @@ export class PdfReader extends BaseReader {
 
     // Set up second page render task if applicable
     if (hasSecondPage && page2 && this.canvas2 && this.ctx2) {
-      const viewport2 = page2.getViewport({ scale: this.scale });
+      const viewport2 = page2.getViewport({ scale: this.scale * dpr });
       this.canvas2.width = viewport2.width;
       this.canvas2.height = viewport2.height;
+      this.canvas2.style.width = `${viewport2.width / dpr}px`;
+      this.canvas2.style.height = `${viewport2.height / dpr}px`;
       this.canvas2.style.display = 'block';
 
       this.currentRenderTask2 = page2.render({
