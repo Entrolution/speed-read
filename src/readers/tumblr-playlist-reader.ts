@@ -25,7 +25,13 @@ import {
   extractLabelFromUrl,
   extractBlogNameFromUrl,
 } from '@/core/tumblr/playlist-parser';
-import { escapeHtml } from '@/core/utils';
+import {
+  escapeHtml,
+  createLoadingHtml,
+  createErrorHtml,
+  createSkeletonHtml,
+  setupRetryListener,
+} from '@/core/utils';
 
 export interface TumblrPlaylistReaderOptions {
   /** Custom CORS proxy URL (appends encoded target URL) */
@@ -517,19 +523,7 @@ export class TumblrPlaylistReader implements FormatReader {
    */
   private showLoadingSkeleton(index: number): void {
     if (!this.container) return;
-
-    this.container.innerHTML = `
-      <article class="tumblr-post tumblr-skeleton">
-        <div class="tumblr-loading-info">Loading post ${index + 1} of ${this.playlistUrls.length}...</div>
-        <div class="skeleton-header"></div>
-        <div class="skeleton-author"></div>
-        <div class="skeleton-line skeleton-line--full"></div>
-        <div class="skeleton-line skeleton-line--full"></div>
-        <div class="skeleton-line skeleton-line--80"></div>
-        <div class="skeleton-line skeleton-line--full"></div>
-        <div class="skeleton-line skeleton-line--60"></div>
-      </article>
-    `;
+    this.container.innerHTML = createSkeletonHtml(index + 1, this.playlistUrls.length);
   }
 
   /**
@@ -537,13 +531,7 @@ export class TumblrPlaylistReader implements FormatReader {
    */
   private showLoading(message: string): void {
     if (!this.container) return;
-
-    this.container.innerHTML = `
-      <div class="tumblr-loading">
-        <div class="tumblr-spinner"></div>
-        <p>${escapeHtml(message)}</p>
-      </div>
-    `;
+    this.container.innerHTML = createLoadingHtml(message);
   }
 
   /**
@@ -551,20 +539,8 @@ export class TumblrPlaylistReader implements FormatReader {
    */
   private showError(message: string): void {
     if (!this.container) return;
-
-    this.container.innerHTML = `
-      <div class="tumblr-error">
-        <div class="tumblr-error-icon">!</div>
-        <h2>Could not load post</h2>
-        <p>${escapeHtml(message)}</p>
-        <button class="tumblr-retry-btn" onclick="this.closest('.tumblr-error').dispatchEvent(new CustomEvent('retry', { bubbles: true }))">
-          Try Again
-        </button>
-      </div>
-    `;
-
-    // Listen for retry
-    this.container.querySelector('.tumblr-error')?.addEventListener('retry', () => {
+    this.container.innerHTML = createErrorHtml(message);
+    setupRetryListener(this.container, () => {
       this.loadPost(this.currentIndex);
     });
   }

@@ -24,7 +24,8 @@ export class CbzReader extends BaseReader {
   private onPageChangeCallback?: (page: number, total: number) => void;
 
   // LRU cache for extracted images (uses lastAccess timestamp for O(1) updates)
-  private readonly maxCacheSize = 5;
+  // Size of 10 balances memory usage vs. avoiding re-extractions during navigation
+  private readonly maxCacheSize = 10;
   private imageCache: Map<number, { blob: Blob; url: string; lastAccess: number }> = new Map();
 
   // Track pending extractions to avoid duplicates

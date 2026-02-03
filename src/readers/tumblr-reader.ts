@@ -18,7 +18,12 @@ import {
   type FetchResult,
   type ProgressCallback,
 } from '@/core/tumblr';
-import { escapeHtml } from '@/core/utils';
+import {
+  escapeHtml,
+  createLoadingHtml,
+  createErrorHtml,
+  setupRetryListener,
+} from '@/core/utils';
 
 export interface TumblrReaderOptions {
   /** Custom CORS proxy URL (appends encoded target URL) */
@@ -121,13 +126,7 @@ export class TumblrReader implements FormatReader {
    */
   private showLoading(): void {
     if (!this.container) return;
-
-    this.container.innerHTML = `
-      <div class="tumblr-loading">
-        <div class="tumblr-spinner"></div>
-        <p>Loading post...</p>
-      </div>
-    `;
+    this.container.innerHTML = createLoadingHtml('Loading post...');
   }
 
   /**
@@ -135,20 +134,8 @@ export class TumblrReader implements FormatReader {
    */
   private showError(message: string): void {
     if (!this.container) return;
-
-    this.container.innerHTML = `
-      <div class="tumblr-error">
-        <div class="tumblr-error-icon">!</div>
-        <h2>Could not load post</h2>
-        <p>${escapeHtml(message)}</p>
-        <button class="tumblr-retry-btn" onclick="this.closest('.tumblr-error').dispatchEvent(new CustomEvent('retry', { bubbles: true }))">
-          Try Again
-        </button>
-      </div>
-    `;
-
-    // Listen for retry
-    this.container.querySelector('.tumblr-error')?.addEventListener('retry', () => {
+    this.container.innerHTML = createErrorHtml(message);
+    setupRetryListener(this.container, () => {
       const currentUrl = this.postHistory[this.historyIndex];
       if (currentUrl) {
         this.loadPost(currentUrl);
