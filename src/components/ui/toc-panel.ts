@@ -2,8 +2,17 @@ import { LitElement, html, css, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import type { TocItem } from '@/types';
 
+/** Fixed height for each TOC item in pixels */
+const ITEM_HEIGHT = 40;
+
+/** Number of items to render above/below visible area */
+const BUFFER_SIZE = 5;
+
+/** Threshold for enabling virtual scrolling */
+const VIRTUAL_SCROLL_THRESHOLD = 50;
+
 /**
- * Slide-out Table of Contents panel
+ * Slide-out Table of Contents panel with virtual scrolling for large lists
  *
  * @element toc-panel
  *
@@ -107,7 +116,38 @@ export class TocPanel extends LitElement {
       list-style: none;
     }
 
+    /* Virtual scroll container */
+    .toc-virtual-list {
+      flex: 1;
+      overflow-y: auto;
+      margin: 0;
+      position: relative;
+    }
+
+    .toc-virtual-spacer {
+      pointer-events: none;
+    }
+
+    .toc-virtual-viewport {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
     .toc-item {
+      margin: 0;
+      padding: 0;
+    }
+
+    .toc-virtual-item {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 40px;
       margin: 0;
       padding: 0;
     }
@@ -115,7 +155,8 @@ export class TocPanel extends LitElement {
     .toc-item-btn {
       display: block;
       width: 100%;
-      padding: 0.75rem 1rem;
+      height: 100%;
+      padding: 0.625rem 1rem;
       border: none;
       background: transparent;
       color: var(--speed-reader-text, #000000);
@@ -124,6 +165,10 @@ export class TocPanel extends LitElement {
       line-height: 1.4;
       cursor: pointer;
       transition: background 0.1s;
+      box-sizing: border-box;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .toc-item-btn:hover {
@@ -195,7 +240,16 @@ export class TocPanel extends LitElement {
   @state()
   private focusedIndex = -1;
 
+  @state()
+  private virtualScrollOffset = 0;
+
+  @state()
+  private containerHeight = 0;
+
   private previouslyFocusedElement: HTMLElement | null = null;
+  private flatItems: TocItem[] = [];
+  private resizeObserver: ResizeObserver | null = null;
+  private scrollListenerAttached = false;
 
   override connectedCallback(): void {
     super.connectedCallback();
@@ -205,6 +259,15 @@ export class TocPanel extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     document.removeEventListener('keydown', this.handleKeydown);
+    this.cleanupVirtualScroll();
+  }
+
+  private cleanupVirtualScroll(): void {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+    this.scrollListenerAttached = false;
   }
 
   override updated(changedProps: PropertyValues): void {
@@ -212,10 +275,49 @@ export class TocPanel extends LitElement {
       if (this.open) {
         // Store the previously focused element before opening
         this.previouslyFocusedElement = document.activeElement as HTMLElement;
+        // Setup virtual scroll observers when opened
+        this.setupVirtualScroll();
       }
       // Note: focus is moved out BEFORE close via moveFocusOutAndClose()
     }
+
+    if (changedProps.has('items')) {
+      // Rebuild flat items when items change
+      this.flatItems = this.flattenItems(this.items);
+    }
   }
+
+  private setupVirtualScroll(): void {
+    // Wait for render to complete before setting up observers
+    requestAnimationFrame(() => {
+      const virtualList = this.renderRoot.querySelector('.toc-virtual-list');
+      if (!virtualList) return;
+
+      // Setup scroll listener
+      if (!this.scrollListenerAttached) {
+        virtualList.addEventListener('scroll', this.handleScroll);
+        this.scrollListenerAttached = true;
+      }
+
+      // Setup resize observer for container height
+      if (!this.resizeObserver) {
+        this.resizeObserver = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            this.containerHeight = entry.contentRect.height;
+          }
+        });
+        this.resizeObserver.observe(virtualList);
+      }
+
+      // Initial measurement
+      this.containerHeight = virtualList.clientHeight;
+    });
+  }
+
+  private handleScroll = (e: Event): void => {
+    const target = e.target as HTMLElement;
+    this.virtualScrollOffset = target.scrollTop;
+  };
 
   /**
    * Move focus out of the panel and then dispatch close event
@@ -280,6 +382,81 @@ export class TocPanel extends LitElement {
     return result;
   }
 
+  /**
+   * Check if virtual scrolling should be used based on item count
+   */
+  private get useVirtualScroll(): boolean {
+    // Ensure flatItems is up to date (in case items changed before updated() ran)
+    if (this.flatItems.length === 0 && this.items.length > 0) {
+      this.flatItems = this.flattenItems(this.items);
+    }
+    return this.flatItems.length > VIRTUAL_SCROLL_THRESHOLD;
+  }
+
+  /**
+   * Calculate the range of items to render based on scroll position
+   */
+  private getVisibleRange(): { start: number; end: number } {
+    const itemCount = this.flatItems.length;
+    if (itemCount === 0) return { start: 0, end: 0 };
+
+    // Use a reasonable default if container height not yet measured
+    // Assume ~500px viewport which fits ~12 items
+    const effectiveHeight = this.containerHeight > 0 ? this.containerHeight : 500;
+    const visibleCount = Math.ceil(effectiveHeight / ITEM_HEIGHT);
+    const startIndex = Math.floor(this.virtualScrollOffset / ITEM_HEIGHT);
+
+    const start = Math.max(0, startIndex - BUFFER_SIZE);
+    const end = Math.min(itemCount, startIndex + visibleCount + BUFFER_SIZE);
+
+    return { start, end };
+  }
+
+  /**
+   * Render a single TOC item for virtual scrolling (positioned absolutely)
+   */
+  private renderVirtualItem(item: TocItem, index: number): unknown {
+    const levelClass = item.level > 0 ? `toc-item-btn--level-${Math.min(item.level, 3)}` : '';
+    const activeClass = item.id === this.activeId ? 'toc-item-btn--active' : '';
+    const top = index * ITEM_HEIGHT;
+
+    return html`
+      <li
+        class="toc-virtual-item"
+        style="top: ${top}px"
+      >
+        <button
+          class="toc-item-btn ${levelClass} ${activeClass}"
+          @click=${() => this.handleItemClick(item)}
+          aria-current=${item.id === this.activeId ? 'true' : 'false'}
+        >
+          ${item.label}
+        </button>
+      </li>
+    `;
+  }
+
+  /**
+   * Render the virtual scrolling list
+   */
+  private renderVirtualList(): unknown {
+    const { start, end } = this.getVisibleRange();
+    const totalHeight = this.flatItems.length * ITEM_HEIGHT;
+    const visibleItems = this.flatItems.slice(start, end);
+
+    return html`
+      <div class="toc-virtual-list" role="tree">
+        <div class="toc-virtual-spacer" style="height: ${totalHeight}px"></div>
+        <ul class="toc-virtual-viewport">
+          ${visibleItems.map((item, i) => this.renderVirtualItem(item, start + i))}
+        </ul>
+      </div>
+    `;
+  }
+
+  /**
+   * Render a standard (non-virtual) TOC item with nested children
+   */
   private renderTocItem(item: TocItem): unknown {
     const levelClass = item.level > 0 ? `toc-item-btn--level-${Math.min(item.level, 3)}` : '';
     const activeClass = item.id === this.activeId ? 'toc-item-btn--active' : '';
@@ -301,6 +478,17 @@ export class TocPanel extends LitElement {
             `
           : ''}
       </li>
+    `;
+  }
+
+  /**
+   * Render the standard (non-virtual) list
+   */
+  private renderStandardList(): unknown {
+    return html`
+      <ul class="toc-list" role="tree">
+        ${this.items.map(item => this.renderTocItem(item))}
+      </ul>
     `;
   }
 
@@ -328,11 +516,9 @@ export class TocPanel extends LitElement {
           </button>
         </header>
         ${this.items.length > 0
-          ? html`
-              <ul class="toc-list" role="tree">
-                ${this.items.map(item => this.renderTocItem(item))}
-              </ul>
-            `
+          ? this.useVirtualScroll
+            ? this.renderVirtualList()
+            : this.renderStandardList()
           : html`
               <div class="no-toc">
                 No table of contents available
