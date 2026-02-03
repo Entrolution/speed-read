@@ -1,10 +1,9 @@
 import type { DocumentFormat, FormatReader } from '@/types';
 
 export { BaseReader } from './base-reader';
-export { EpubReader } from './epub-reader';
-export { PdfReader } from './pdf-reader';
-export { CbzReader } from './cbz-reader';
-export { TumblrReader } from './tumblr-reader';
+
+// Note: Individual readers (EpubReader, PdfReader, CbzReader, TumblrReader) are not
+// exported statically to enable proper code splitting. Use loadReader() instead.
 
 /**
  * Dynamically load the appropriate reader for a format

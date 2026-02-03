@@ -153,36 +153,7 @@ The reader will:
 
 ## Theming
 
-Customize the appearance with CSS custom properties:
-
-```css
-speed-reader {
-  /* Background and text colors */
-  --speed-reader-bg: #ffffff;
-  --speed-reader-text: #000000;
-
-  /* Accent color for buttons */
-  --speed-reader-accent: #0066cc;
-
-  /* Error state colors */
-  --speed-reader-error-bg: #fff0f0;
-  --speed-reader-error-text: #cc0000;
-}
-```
-
-### Dark Mode
-
-```css
-@media (prefers-color-scheme: dark) {
-  speed-reader {
-    --speed-reader-bg: #1a1a1a;
-    --speed-reader-text: #e0e0e0;
-    --speed-reader-accent: #66b3ff;
-    --speed-reader-error-bg: #2d1a1a;
-    --speed-reader-error-text: #ff6666;
-  }
-}
-```
+Speed-Read supports theming via CSS custom properties. See the [README](../README.md#theming) for available properties and dark mode examples.
 
 ## Handling Events
 

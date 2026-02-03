@@ -7,8 +7,6 @@ import type {
   FormatReader,
   ReaderNavigation,
   TumblrPost,
-  TumblrContentBlock,
-  ReblogEntry,
   TocItem,
 } from '@/types';
 import {
@@ -17,6 +15,8 @@ import {
   TumblrCache,
   generateEpub,
   fetchViaCorsProxy,
+  renderBlock,
+  renderReblogEntry,
   type ProgressCallback,
 } from '@/core/tumblr';
 import {
@@ -25,6 +25,7 @@ import {
   extractLabelFromUrl,
   extractBlogNameFromUrl,
 } from '@/core/tumblr/playlist-parser';
+import { escapeHtml } from '@/core/utils';
 
 export interface TumblrPlaylistReaderOptions {
   /** Custom CORS proxy URL (appends encoded target URL) */
@@ -540,7 +541,7 @@ export class TumblrPlaylistReader implements FormatReader {
     this.container.innerHTML = `
       <div class="tumblr-loading">
         <div class="tumblr-spinner"></div>
-        <p>${this.escapeHtml(message)}</p>
+        <p>${escapeHtml(message)}</p>
       </div>
     `;
   }
@@ -555,7 +556,7 @@ export class TumblrPlaylistReader implements FormatReader {
       <div class="tumblr-error">
         <div class="tumblr-error-icon">!</div>
         <h2>Could not load post</h2>
-        <p>${this.escapeHtml(message)}</p>
+        <p>${escapeHtml(message)}</p>
         <button class="tumblr-retry-btn" onclick="this.closest('.tumblr-error').dispatchEvent(new CustomEvent('retry', { bubbles: true }))">
           Try Again
         </button>
@@ -578,20 +579,20 @@ export class TumblrPlaylistReader implements FormatReader {
 
     // Build reblog trail HTML
     const trailHtml = post.reblogTrail.length > 0
-      ? `<div class="tumblr-reblog-trail">${post.reblogTrail.map(entry => this.renderReblogEntry(entry)).join('')}</div>`
+      ? `<div class="tumblr-reblog-trail">${post.reblogTrail.map(entry => renderReblogEntry(entry)).join('')}</div>`
       : '';
 
     // Build main content HTML
-    const contentHtml = post.content.map(block => this.renderBlock(block)).join('');
+    const contentHtml = post.content.map(block => renderBlock(block)).join('');
 
     // Title
     const titleHtml = post.title
-      ? `<h1 class="tumblr-title">${this.escapeHtml(post.title)}</h1>`
+      ? `<h1 class="tumblr-title">${escapeHtml(post.title)}</h1>`
       : '';
 
     // Tags
     const tagsHtml = post.tags.length > 0
-      ? `<div class="tumblr-tags">${post.tags.map(t => `<span class="tumblr-tag">#${this.escapeHtml(t)}</span>`).join(' ')}</div>`
+      ? `<div class="tumblr-tags">${post.tags.map(t => `<span class="tumblr-tag">#${escapeHtml(t)}</span>`).join(' ')}</div>`
       : '';
 
     this.container.innerHTML = `
@@ -600,8 +601,8 @@ export class TumblrPlaylistReader implements FormatReader {
         ${trailHtml}
         <div class="tumblr-content">
           <div class="tumblr-author">
-            <a href="${this.escapeHtml(post.blogUrl)}" target="_blank" rel="noopener">
-              <strong>${this.escapeHtml(post.blogName)}</strong>
+            <a href="${escapeHtml(post.blogUrl)}" target="_blank" rel="noopener">
+              <strong>${escapeHtml(post.blogName)}</strong>
             </a>
           </div>
           ${contentHtml}
@@ -614,104 +615,4 @@ export class TumblrPlaylistReader implements FormatReader {
     this.container.scrollTop = 0;
   }
 
-  /**
-   * Render a reblog entry
-   */
-  private renderReblogEntry(entry: ReblogEntry): string {
-    const content = entry.content.map(b => this.renderBlock(b)).join('');
-    return `
-      <div class="tumblr-reblog-entry">
-        <div class="tumblr-reblog-author">
-          <a href="${this.escapeHtml(entry.blogUrl)}" target="_blank" rel="noopener">
-            ${this.escapeHtml(entry.blogName)}
-          </a>
-        </div>
-        <div class="tumblr-reblog-content">${content}</div>
-      </div>
-    `;
-  }
-
-  /**
-   * Render a content block
-   */
-  private renderBlock(block: TumblrContentBlock): string {
-    switch (block.type) {
-      case 'heading1':
-        return `<h1>${this.escapeHtml(block.text || '')}</h1>`;
-      case 'heading2':
-        return `<h2>${this.escapeHtml(block.text || '')}</h2>`;
-      case 'image':
-        return block.url
-          ? `<img src="${this.escapeHtml(block.url)}" alt="" class="tumblr-image" loading="lazy" />`
-          : '';
-      case 'link':
-        return block.url
-          ? `<p><a href="${this.escapeHtml(block.url)}" target="_blank" rel="noopener">${this.escapeHtml(block.text || block.url)}</a></p>`
-          : `<p>${this.escapeHtml(block.text || '')}</p>`;
-      case 'video':
-        return `<div class="tumblr-video">[Video: ${this.escapeHtml(block.url || 'embedded')}]</div>`;
-      case 'audio':
-        return `<div class="tumblr-audio">[Audio: ${this.escapeHtml(block.url || 'embedded')}]</div>`;
-      case 'text':
-      default:
-        return `<p>${this.sanitizeHtml(block.text || '')}</p>`;
-    }
-  }
-
-  // Escape map for single-pass HTML escaping
-  private static readonly HTML_ESCAPE_MAP: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  };
-
-  private escapeHtml(text: string): string {
-    return text.replace(/[&<>"']/g, char => TumblrPlaylistReader.HTML_ESCAPE_MAP[char]);
-  }
-
-  /**
-   * Sanitize HTML, keeping only safe tags
-   */
-  private sanitizeHtml(html: string): string {
-    const allowedTags = ['strong', 'em', 'b', 'i', 's', 'u', 'br'];
-
-    const temp = document.createElement('div');
-    temp.innerHTML = html;
-
-    const clean = (node: Node): string => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        return this.escapeHtml(node.textContent || '');
-      }
-
-      if (node.nodeType !== Node.ELEMENT_NODE) {
-        return '';
-      }
-
-      const element = node as Element;
-      const tagName = element.tagName.toLowerCase();
-
-      if (allowedTags.includes(tagName)) {
-        const children = Array.from(element.childNodes).map(clean).join('');
-        if (tagName === 'br') {
-          return '<br/>';
-        }
-        return `<${tagName}>${children}</${tagName}>`;
-      }
-
-      if (tagName === 'a') {
-        const href = element.getAttribute('href');
-        const children = Array.from(element.childNodes).map(clean).join('');
-        if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
-          return `<a href="${this.escapeHtml(href)}" target="_blank" rel="noopener">${children}</a>`;
-        }
-        return children;
-      }
-
-      return Array.from(element.childNodes).map(clean).join('');
-    };
-
-    return Array.from(temp.childNodes).map(clean).join('');
-  }
 }

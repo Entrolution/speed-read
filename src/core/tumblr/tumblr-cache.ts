@@ -16,6 +16,10 @@ const MAX_CACHED_POSTS = 50;
 
 export class TumblrCache {
   private memoryCache: Map<string, CachedPost> = new Map();
+  /** Parsed localStorage cache to avoid re-parsing on every read */
+  private parsedStorageCache: Record<string, CachedPost> | null = null;
+  /** Flag to track if storage cache is dirty and needs to be synced */
+  private storageDirty = false;
 
   /**
    * Get a cached post by URL
@@ -86,6 +90,7 @@ export class TumblrCache {
    */
   clear(): void {
     this.memoryCache.clear();
+    this.parsedStorageCache = {};
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {
@@ -99,11 +104,8 @@ export class TumblrCache {
   getStats(): { memoryCount: number; storageCount: number } {
     let storageCount = 0;
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
-      if (data) {
-        const cache = JSON.parse(data);
-        storageCount = Object.keys(cache).length;
-      }
+      this.ensureParsedCache();
+      storageCount = Object.keys(this.parsedStorageCache!).length;
     } catch {
       // Ignore errors
     }
@@ -136,45 +138,45 @@ export class TumblrCache {
 
   /**
    * Load a single entry from localStorage
+   * Uses parsed cache to avoid re-parsing on every read
    */
   private loadFromStorage(url: string): CachedPost | null {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
-      if (!data) return null;
-
-      const cache = JSON.parse(data) as Record<string, CachedPost>;
-      return cache[url] ?? null;
+      this.ensureParsedCache();
+      return this.parsedStorageCache![url] ?? null;
     } catch {
+      this.parsedStorageCache = {};
       return null;
     }
   }
 
   /**
    * Load all entries from localStorage into memory
+   * Uses parsed cache to avoid re-parsing
    */
   private loadAllFromStorage(): void {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
-      if (!data) return;
+      this.ensureParsedCache();
 
-      const cache = JSON.parse(data) as Record<string, CachedPost>;
-      for (const [url, cached] of Object.entries(cache)) {
+      for (const [url, cached] of Object.entries(this.parsedStorageCache!)) {
         if (!this.memoryCache.has(url) && !this.isExpired(cached)) {
           this.memoryCache.set(url, cached);
         }
       }
     } catch {
-      // Ignore errors
+      this.parsedStorageCache = {};
     }
   }
 
   /**
    * Save an entry to localStorage
+   * Updates both localStorage and the parsed cache
    */
   private saveToStorage(url: string, cached: CachedPost): void {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
-      const cache: Record<string, CachedPost> = data ? JSON.parse(data) : {};
+      // Initialize parsed cache if needed
+      this.ensureParsedCache();
+      const cache = this.parsedStorageCache!;
 
       cache[url] = cached;
 
@@ -200,33 +202,50 @@ export class TumblrCache {
       // Try to clear old entries and retry
       try {
         this.pruneStorage();
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({ [url]: cached }));
+        this.parsedStorageCache = { [url]: cached };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.parsedStorageCache));
       } catch {
         // Give up - operate in memory-only mode
+        this.parsedStorageCache = { [url]: cached };
+      }
+    }
+  }
+
+  /**
+   * Ensure parsed cache is initialized
+   */
+  private ensureParsedCache(): void {
+    if (this.parsedStorageCache === null) {
+      try {
+        const data = localStorage.getItem(STORAGE_KEY);
+        this.parsedStorageCache = data ? JSON.parse(data) : {};
+      } catch {
+        this.parsedStorageCache = {};
       }
     }
   }
 
   /**
    * Prune expired entries from localStorage
+   * Updates both localStorage and the parsed cache
    */
   private pruneStorage(): void {
     try {
-      const data = localStorage.getItem(STORAGE_KEY);
-      if (!data) return;
+      this.ensureParsedCache();
 
-      const cache = JSON.parse(data) as Record<string, CachedPost>;
       const pruned: Record<string, CachedPost> = {};
 
-      for (const [url, cached] of Object.entries(cache)) {
+      for (const [url, cached] of Object.entries(this.parsedStorageCache!)) {
         if (!this.isExpired(cached)) {
           pruned[url] = cached;
         }
       }
 
+      this.parsedStorageCache = pruned;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(pruned));
     } catch {
       // If all else fails, clear the cache
+      this.parsedStorageCache = {};
       try {
         localStorage.removeItem(STORAGE_KEY);
       } catch {

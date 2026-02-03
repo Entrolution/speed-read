@@ -18,3 +18,4 @@ export {
   extractLabelFromUrl,
   extractBlogNameFromUrl,
 } from './playlist-parser';
+export { renderBlock, renderReblogEntry } from './tumblr-render';
