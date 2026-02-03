@@ -32,6 +32,9 @@ export class CbzReader extends BaseReader {
   // Track pending extractions to avoid duplicates
   private pendingExtractions: Map<number, Promise<Blob>> = new Map();
 
+  // Track navigation direction for adaptive preloading
+  private lastPageNum = 1;
+
   // Zoom and layout state
   private zoomLevel = 1.0;
   private fitMode: FitMode = 'page';
@@ -204,9 +207,19 @@ export class CbzReader extends BaseReader {
 
   /**
    * Preload adjacent pages in background
+   * Adapts preload strategy based on navigation direction
    */
   private preloadAdjacent(currentPage: number): void {
-    const pagesToPreload = [currentPage + 1, currentPage - 1, currentPage + 2];
+    // Determine navigation direction
+    const goingForward = currentPage >= this.lastPageNum;
+    this.lastPageNum = currentPage;
+
+    // Prioritize preloading in the direction of travel
+    // Forward: +1, +2, +3, -1
+    // Backward: -1, -2, -3, +1
+    const pagesToPreload = goingForward
+      ? [currentPage + 1, currentPage + 2, currentPage + 3, currentPage - 1]
+      : [currentPage - 1, currentPage - 2, currentPage - 3, currentPage + 1];
 
     for (const page of pagesToPreload) {
       const index = page - 1;

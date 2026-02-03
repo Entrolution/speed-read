@@ -14,6 +14,8 @@ export interface FetchOptions {
   customProxy?: string;
   /** Timeout in milliseconds (default: 10000) */
   timeout?: number;
+  /** AbortSignal for canceling the request */
+  signal?: AbortSignal;
 }
 
 export interface TumblrApiResponse {
@@ -173,6 +175,7 @@ export async function fetchViaCorsProxy(
   options?: FetchOptions
 ): Promise<string> {
   const timeout = options?.timeout ?? 10000;
+  const externalSignal = options?.signal;
 
   // If custom proxy provided, try it first (and only)
   const proxies = options?.customProxy
@@ -182,14 +185,31 @@ export async function fetchViaCorsProxy(
   const errors: Error[] = [];
 
   for (const proxy of proxies) {
+    // Check if already aborted before starting
+    if (externalSignal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
+
+    // Create a combined abort controller for timeout + external signal
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    // Listen to external signal if provided
+    const externalAbortHandler = () => controller.abort();
+    externalSignal?.addEventListener('abort', externalAbortHandler);
+
     try {
       const proxyUrl = proxy + encodeURIComponent(url);
+
       const response = await fetch(proxyUrl, {
-        signal: AbortSignal.timeout(timeout),
+        signal: controller.signal,
         headers: {
           'Accept': 'text/html,application/xhtml+xml,application/json,text/javascript',
         },
       });
+
+      clearTimeout(timeoutId);
+      externalSignal?.removeEventListener('abort', externalAbortHandler);
 
       if (response.ok) {
         return await response.text();
@@ -197,6 +217,13 @@ export async function fetchViaCorsProxy(
 
       errors.push(new Error(`HTTP ${response.status}: ${response.statusText}`));
     } catch (err) {
+      clearTimeout(timeoutId);
+      externalSignal?.removeEventListener('abort', externalAbortHandler);
+
+      // Re-throw abort errors immediately without trying other proxies
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw err;
+      }
       errors.push(err instanceof Error ? err : new Error(String(err)));
       continue; // Try next proxy
     }

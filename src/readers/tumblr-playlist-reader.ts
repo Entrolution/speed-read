@@ -71,6 +71,10 @@ export class TumblrPlaylistReader implements FormatReader {
   private cleanupKeyboardNav: (() => void) | null = null;
   private isPrefetching = false;
   private prefetchProgress = 0;
+  // AbortController for canceling stale prefetch requests
+  private prefetchAbortController: AbortController | null = null;
+  // Track navigation direction for adaptive preloading
+  private lastIndex = 0;
 
   /**
    * Load interface - not used for playlist reader
@@ -187,28 +191,44 @@ export class TumblrPlaylistReader implements FormatReader {
   }
 
   /**
-   * Preload adjacent posts in background (3 ahead, 1 behind)
+   * Preload adjacent posts in background
+   * Adapts preload strategy based on navigation direction
    */
   private preloadAdjacent(): void {
-    const preloadIndices = [
-      this.currentIndex + 1,
-      this.currentIndex + 2,
-      this.currentIndex + 3,
-      this.currentIndex - 1,
-    ];
+    // Cancel any pending prefetch requests
+    if (this.prefetchAbortController) {
+      this.prefetchAbortController.abort();
+    }
+    this.prefetchAbortController = new AbortController();
+    const signal = this.prefetchAbortController.signal;
+
+    // Determine navigation direction
+    const goingForward = this.currentIndex >= this.lastIndex;
+    this.lastIndex = this.currentIndex;
+
+    // Prioritize preloading in the direction of travel
+    // Forward: +1, +2, +3, -1
+    // Backward: -1, -2, -3, +1
+    const preloadIndices = goingForward
+      ? [this.currentIndex + 1, this.currentIndex + 2, this.currentIndex + 3, this.currentIndex - 1]
+      : [this.currentIndex - 1, this.currentIndex - 2, this.currentIndex - 3, this.currentIndex + 1];
 
     for (const idx of preloadIndices) {
       if (idx >= 0 && idx < this.playlistUrls.length) {
         const url = this.playlistUrls[idx];
         if (!this.cache.has(url)) {
-          fetchTumblrData(url, { customProxy: this.customProxy })
+          fetchTumblrData(url, { customProxy: this.customProxy, signal })
             .then(result => {
               const post = parseTumblrData(result, url);
               this.cache.set(url, post);
               this.notifyCacheUpdate(idx, post);
             })
-            .catch(() => {
-              // Ignore preload errors
+            .catch((err) => {
+              // Ignore abort and other preload errors
+              if (err instanceof DOMException && err.name === 'AbortError') {
+                return; // Expected when navigation changes
+              }
+              // Ignore other preload errors silently
             });
         }
       }
@@ -469,6 +489,12 @@ export class TumblrPlaylistReader implements FormatReader {
     if (this.cleanupKeyboardNav) {
       this.cleanupKeyboardNav();
       this.cleanupKeyboardNav = null;
+    }
+
+    // Abort any pending prefetch requests
+    if (this.prefetchAbortController) {
+      this.prefetchAbortController.abort();
+      this.prefetchAbortController = null;
     }
 
     this.container = null;
