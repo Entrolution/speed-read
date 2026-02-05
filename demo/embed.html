@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Speed-Read Embed</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    speed-reader { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <speed-reader id="reader" locked></speed-reader>
+
+  <script type="module">
+    import 'speed-read';
+
+    const params = new URLSearchParams(location.search);
+    const reader = document.getElementById('reader');
+
+    const attrs = ['src', 'tumblr', 'tumblr-proxy', 'tumblr-playlist', 'manifest'];
+    for (const attr of attrs) {
+      const value = params.get(attr);
+      if (value) reader.setAttribute(attr, value);
+    }
+  </script>
+</body>
+</html>

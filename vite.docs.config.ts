@@ -24,6 +24,12 @@ export default defineConfig({
   build: {
     outDir: '../docs-dist',
     emptyOutDir: true,
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'demo/index.html'),
+        embed: resolve(__dirname, 'demo/embed.html'),
+      },
+    },
   },
   plugins: [copySamples()],
   resolve: {
