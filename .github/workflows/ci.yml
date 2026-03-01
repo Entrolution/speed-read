@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404
 
     strategy:
       matrix:
@@ -48,7 +48,7 @@ jobs:
           retention-days: 7
 
   e2e:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     needs: build
 
     steps:
