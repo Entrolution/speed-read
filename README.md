@@ -1,5 +1,9 @@
 # Speed-Read
 
+> **This project is no longer maintained.**
+>
+> Speed-Read is archived as of May 2026 and will not receive further updates, bug fixes, or security patches. The npm package `@entrolution/speed-read` remains available but is deprecated.
+
 Lightweight, embeddable document reader for EPUB, PDF, CBZ, and Tumblr posts. Add a reader to any webpage in one line of code.
 
 [![npm](https://img.shields.io/npm/v/@entrolution/speed-read)](https://www.npmjs.com/package/@entrolution/speed-read)
